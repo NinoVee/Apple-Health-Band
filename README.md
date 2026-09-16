@@ -22,8 +22,10 @@ syncs the data it collects into Apple Health automatically.
   in Health.
 - **Trends** — 7-day step and active-energy history, read back from Health.
 - **Goals** — editable Move/Exercise/Stand targets, persisted locally.
+- **AI Insights** — a chat tab where you can ask Claude or ChatGPT about
+  your Health data. Off by default; see "AI Insights" below.
 - **Settings** — Health authorization status, paired-device management,
-  and a Light/Dark/System appearance toggle.
+  a Light/Dark/System appearance toggle, and AI Insights configuration.
 
 ## How it talks to your band
 
@@ -101,24 +103,58 @@ Steps written by the app are Health's real, shared `stepCount` type, so a
 Watch or other app's steps and this app's band-derived steps combine into
 one daily total, same as Health does for any two sources.
 
+## AI Insights
+
+A chat tab (`Sources/Views/Insights/HealthChatView.swift`) where you can
+ask Claude or ChatGPT questions about your Health data. **Off by default**
+— nothing is sent anywhere until you turn it on in Settings and send a
+message yourself.
+
+**Architecture, and why:** the app never holds an Anthropic/OpenAI API
+key directly — an API key embedded in an app binary can be extracted by
+anyone who decompiles it, and then spent against your account. Instead,
+the app calls a small relay server (`Server/`, a Vercel serverless
+function) that you deploy and that holds the real API keys as
+server-only environment variables. See **`Server/README.md`** for
+deploy steps — you need to do this before the feature works; there's no
+built-in server.
+
+**What actually gets sent:** on each message, `HealthContextBuilder`
+builds a plain-text summary from the same aggregate numbers already
+shown on the Today/Sensors tabs (steps, heart rate, SpO2, body
+composition, etc.) — never raw HealthKit samples — plus the visible
+chat conversation. `Settings → AI Insights` also has a Shared Secret
+field: it's a weaker, app-side secret (separate from your real API
+keys) that just keeps random internet traffic off your relay endpoint;
+set the same value in both places.
+
+This sends health information to a third-party AI service by design —
+that's the feature. Treat its answers as informational, not medical
+advice; the relay's system prompt tells the model the same thing.
+
 ## Project structure
 
 ```
 Sources/
   App/            App entry point, root TabView
-  Models/         Plain data types (SensorReading, DailyActivity, Goals, BandDevice)
+  Models/         Plain data types (SensorReading, DailyActivity, Goals, BandDevice, ...)
   Bluetooth/       CBCentralManager wrapper, GATT UUIDs, characteristic parsers
   HealthKit/       HKHealthStore wrapper: auth, writes, today's totals, 7-day history
-  Sync/           Glues Bluetooth readings -> HealthKit writes + ring estimates
-  Views/          Today / Sensors / Trends / Goals / Settings, one folder each
+  Sync/           Glues Bluetooth readings -> HealthKit writes + ring/HRV estimates
+  AI/             Health summary builder, relay client, chat view model
+  Views/          Today / Sensors / Trends / Goals / Insights / Settings, one folder each
   Extensions/
   Resources/      Assets.xcassets (add your own AppIcon image — a 1024x1024
                    slot is scaffolded but empty)
 Tests/
   AppleHealthBandTests/   Pure-logic unit tests for the BLE parsers and ring math
+Server/
+  api/chat.js     Vercel serverless relay for AI Insights — see Server/README.md
 ```
 
 There's no hand-edited `.xcodeproj` in the repo — see setup below for why.
+`Server/` is a separate Node.js project, deployed independently (not
+part of the Xcode project or iOS build).
 
 ## Setup
 

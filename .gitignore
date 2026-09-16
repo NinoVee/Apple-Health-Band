@@ -15,3 +15,7 @@ Generated/
 # Swift Package Manager
 .swiftpm/
 Package.resolved
+
+# Server/ (Node.js relay)
+Server/node_modules/
+Server/.vercel/

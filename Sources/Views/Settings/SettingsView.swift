@@ -4,6 +4,10 @@ struct SettingsView: View {
     @EnvironmentObject var healthKit: HealthKitManager
     @EnvironmentObject var bluetooth: BandBluetoothManager
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @AppStorage("aiInsightsEnabled") private var aiInsightsEnabled = false
+    @AppStorage("aiProvider") private var aiProvider: AIProvider = .claude
+    @AppStorage("aiRelayURL") private var aiRelayURL = ""
+    @AppStorage("aiSharedSecret") private var aiSharedSecret = ""
 
     var body: some View {
         NavigationStack {
@@ -15,6 +19,25 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+                Section {
+                    Toggle("Enable AI Insights", isOn: $aiInsightsEnabled)
+                    if aiInsightsEnabled {
+                        Picker("Provider", selection: $aiProvider) {
+                            ForEach(AIProvider.allCases) { provider in
+                                Text(provider.label).tag(provider)
+                            }
+                        }
+                        TextField("Relay URL (e.g. https://your-app.vercel.app/api/chat)", text: $aiRelayURL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                        SecureField("Shared Secret", text: $aiSharedSecret)
+                    }
+                } header: {
+                    Text("AI Insights")
+                } footer: {
+                    Text("Off by default. When enabled, sending a message in the AI Insights tab sends a text summary of your recent Health data — not raw records — to your own relay server (see Server/ in the repo), which forwards it to \(aiProvider.label). Nothing is sent automatically. \(aiProvider.label) is a third-party AI service, not a medical professional.")
                 }
                 Section("Apple Health") {
                     HStack {

@@ -13,6 +13,8 @@ struct RootView: View {
                 .tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }
             GoalsView()
                 .tabItem { Label("Goals", systemImage: "target") }
+            HealthChatView()
+                .tabItem { Label("AI Insights", systemImage: "sparkles") }
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
