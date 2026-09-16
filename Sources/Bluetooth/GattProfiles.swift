@@ -9,8 +9,9 @@ enum GattService {
     static let runningSpeedCadence = CBUUID(string: "1814")
     static let pulseOximeter = CBUUID(string: "1822")
     static let bodyComposition = CBUUID(string: "181B")
+    static let healthThermometer = CBUUID(string: "1809")
 
-    static let standard: [CBUUID] = [heartRate, battery, runningSpeedCadence, pulseOximeter, bodyComposition]
+    static let standard: [CBUUID] = [heartRate, battery, runningSpeedCadence, pulseOximeter, bodyComposition, healthThermometer]
 }
 
 enum GattCharacteristic {
@@ -19,6 +20,7 @@ enum GattCharacteristic {
     static let rscMeasurement = CBUUID(string: "2A53")
     static let pulseOximeterMeasurement = CBUUID(string: "2A5E")
     static let bodyCompositionMeasurement = CBUUID(string: "2A9C")
+    static let temperatureMeasurement = CBUUID(string: "2A1C")
 }
 
 /// Many bands expose steps, sleep, and SpO2 through vendor-specific

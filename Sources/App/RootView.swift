@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct RootView: View {
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+
     var body: some View {
         TabView {
             TodayView()
@@ -14,5 +16,6 @@ struct RootView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .preferredColorScheme(appearanceMode.colorScheme)
     }
 }

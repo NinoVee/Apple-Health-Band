@@ -3,6 +3,7 @@ import SwiftUI
 struct SensorsView: View {
     @EnvironmentObject var bluetooth: BandBluetoothManager
     @EnvironmentObject var healthKit: HealthKitManager
+    @EnvironmentObject var coordinator: ActivitySyncCoordinator
     @State private var showingScan = false
     @State private var ecgHistory: [HealthKitManager.ECGSummary] = []
 
@@ -27,6 +28,13 @@ struct SensorsView: View {
                     Section("Heart Rate") {
                         Text("\(Int(heartRate.value)) bpm").font(.largeTitle.bold())
                         HeartRateGraphView(readings: bluetooth.heartRateHistory)
+                        if let hrv = coordinator.latestHRV {
+                            HStack {
+                                Text("HRV (SDNN)")
+                                Spacer()
+                                Text("\(Int(hrv)) ms").foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
 
@@ -76,6 +84,9 @@ struct SensorsView: View {
         case .bodyFatPercentage: return "Body Fat"
         case .bodyMass: return "Weight"
         case .leanBodyMass: return "Lean Mass"
+        case .bodyTemperature: return "Body Temperature"
+        case .rrInterval: return "RR Interval"
+        case .heartRateVariability: return "Heart Rate Variability"
         }
     }
 
@@ -90,6 +101,9 @@ struct SensorsView: View {
         case .bodyFatPercentage: return "percent"
         case .bodyMass: return "scalemass.fill"
         case .leanBodyMass: return "figure.arms.open"
+        case .bodyTemperature: return "thermometer"
+        case .rrInterval: return "waveform"
+        case .heartRateVariability: return "waveform.path.ecg.rectangle"
         }
     }
 

@@ -3,10 +3,19 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var healthKit: HealthKitManager
     @EnvironmentObject var bluetooth: BandBluetoothManager
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Appearance") {
+                    Picker("Appearance", selection: $appearanceMode) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
                 Section("Apple Health") {
                     HStack {
                         Text("Status")

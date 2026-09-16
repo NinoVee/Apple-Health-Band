@@ -12,8 +12,9 @@ import HealthKit
 /// when available) but otherwise falls back to its own on-device
 /// estimate computed by `ActivitySyncCoordinator` from band heart-rate
 /// and movement data. Steps, distance, active energy, heart rate, blood
-/// oxygen, and body composition (weight/fat %/lean mass) are ordinary
-/// writable types and sync for real.
+/// oxygen, body temperature, heart rate variability (SDNN, computed from
+/// the band's RR intervals), and body composition (weight/fat %/lean
+/// mass) are ordinary writable types and sync for real.
 ///
 /// ECG is a similar Watch-style restriction, but stricter: writing a new
 /// ECG *recording* requires a dedicated entitlement Apple only grants to
@@ -33,7 +34,7 @@ final class HealthKitManager: ObservableObject {
     private let writeTypes: Set<HKSampleType> = {
         let ids: [HKQuantityTypeIdentifier] = [
             .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation,
-            .bodyFatPercentage, .bodyMass, .leanBodyMass
+            .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN
         ]
         return Set(ids.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
     }()
@@ -41,7 +42,7 @@ final class HealthKitManager: ObservableObject {
     private let readTypes: Set<HKObjectType> = {
         let quantityIDs: [HKQuantityTypeIdentifier] = [
             .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation, .appleExerciseTime,
-            .bodyFatPercentage, .bodyMass, .leanBodyMass
+            .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN
         ]
         var set = Set<HKObjectType>(quantityIDs.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
         if let standType = HKCategoryType.categoryType(forIdentifier: .appleStandHour) {
@@ -89,8 +90,12 @@ final class HealthKitManager: ObservableObject {
             save(quantity: reading.value, unit: .gramUnit(with: .kilo), type: .bodyMass, at: reading.timestamp)
         case .leanBodyMass:
             save(quantity: reading.value, unit: .gramUnit(with: .kilo), type: .leanBodyMass, at: reading.timestamp)
-        case .steps, .battery:
-            break // steps are written as cumulative totals via writeStepCount; battery is device telemetry only
+        case .bodyTemperature:
+            save(quantity: reading.value, unit: .degreeCelsius(), type: .bodyTemperature, at: reading.timestamp)
+        case .heartRateVariability:
+            save(quantity: reading.value, unit: .secondUnit(with: .milli), type: .heartRateVariabilitySDNN, at: reading.timestamp)
+        case .steps, .battery, .rrInterval:
+            break // steps are cumulative totals via writeStepCount; battery is telemetry; rrInterval feeds HRV only
         }
     }
 

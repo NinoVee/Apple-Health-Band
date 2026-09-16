@@ -5,15 +5,46 @@ import CoreBluetooth
 final class SensorParserTests: XCTestCase {
     func testHeartRateUInt8Format() {
         let data = Data([0x00, 72]) // flags: uint8 format, value 72 bpm
-        let reading = SensorParsers.heartRate(from: data)
-        XCTAssertEqual(reading?.kind, .heartRate)
-        XCTAssertEqual(reading?.value, 72)
+        let readings = SensorParsers.heartRate(from: data)
+        XCTAssertEqual(readings.count, 1)
+        XCTAssertEqual(readings.first?.kind, .heartRate)
+        XCTAssertEqual(readings.first?.value, 72)
     }
 
     func testHeartRateUInt16Format() {
         let data = Data([0x01, 0x88, 0x00]) // flags: uint16 format, value 136 little-endian
-        let reading = SensorParsers.heartRate(from: data)
-        XCTAssertEqual(reading?.value, 136)
+        let readings = SensorParsers.heartRate(from: data)
+        XCTAssertEqual(readings.first?.value, 136)
+    }
+
+    func testHeartRateWithRRIntervals() {
+        // flags: uint8 format, RR-interval present (bit 4, 0x10); hr=70;
+        // RR#1 raw 1024 (1/1024s units) -> 1000.0ms; RR#2 raw 960 -> 937.5ms
+        let data = Data([0x10, 70, 0x00, 0x04, 0xC0, 0x03])
+        let readings = SensorParsers.heartRate(from: data)
+
+        XCTAssertEqual(readings.count, 3)
+        XCTAssertEqual(readings[0].kind, .heartRate)
+        XCTAssertEqual(readings[0].value, 70)
+        XCTAssertEqual(readings[1].kind, .rrInterval)
+        XCTAssertEqual(readings[1].value, 1000.0, accuracy: 0.001)
+        XCTAssertEqual(readings[2].kind, .rrInterval)
+        XCTAssertEqual(readings[2].value, 937.5, accuracy: 0.001)
+    }
+
+    func testBodyTemperatureCelsius() {
+        // flags: Celsius, no optional fields; mantissa 365, exponent -1 -> 36.5°C
+        let data = Data([0x00, 0x6D, 0x01, 0x00, 0xFF])
+        let reading = SensorParsers.bodyTemperature(from: data)
+        XCTAssertEqual(reading?.kind, .bodyTemperature)
+        XCTAssertEqual(reading?.value, 36.5, accuracy: 0.001)
+    }
+
+    func testBodyTemperatureFahrenheitConvertsToCelsius() {
+        // flags: Fahrenheit (bit 0); mantissa 986, exponent -1 -> 98.6°F -> 37.0°C
+        let data = Data([0x01, 0xDA, 0x03, 0x00, 0xFF])
+        let reading = SensorParsers.bodyTemperature(from: data)
+        XCTAssertEqual(reading?.value, 37.0, accuracy: 0.01)
     }
 
     func testBatteryLevel() {

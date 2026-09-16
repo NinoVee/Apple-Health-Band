@@ -16,12 +16,14 @@ syncs the data it collects into Apple Health automatically.
 - **Today** — Move / Exercise / Stand rings, styled after Apple's Activity
   app, plus steps, distance, and live heart rate.
 - **Sensors** — scans for and pairs with a nearby BLE band, shows live
-  heart rate (with a short graph), SpO2, cadence, battery, body
-  composition (weight/body fat/lean mass), etc., plus a read-only list of
-  ECG recordings already in Health.
+  heart rate (with a short graph and a computed HRV/SDNN readout), SpO2,
+  cadence, battery, body temperature, body composition (weight/body
+  fat/lean mass), etc., plus a read-only list of ECG recordings already
+  in Health.
 - **Trends** — 7-day step and active-energy history, read back from Health.
 - **Goals** — editable Move/Exercise/Stand targets, persisted locally.
-- **Settings** — Health authorization status and paired-device management.
+- **Settings** — Health authorization status, paired-device management,
+  and a Light/Dark/System appearance toggle.
 
 ## How it talks to your band
 
@@ -35,6 +37,16 @@ syncs the data it collects into Apple Health automatically.
 | Cadence / distance | Running Speed and Cadence (`1814`) | RSC Measurement (`2A53`) |
 | SpO2 | Pulse Oximeter (`1822`) | Spot-check Measurement (`2A5E`) |
 | Weight / body fat / lean mass | Body Composition (`181B`) | Body Composition Measurement (`2A9C`) |
+| Body temperature | Health Thermometer (`1809`) | Temperature Measurement (`2A1C`) |
+
+Heart rate variability isn't its own GATT profile — it's computed
+in-app from **RR intervals** (beat-to-beat gaps), which the standard
+Heart Rate Measurement characteristic already carries as an optional
+field when a band supports it. `ActivitySyncCoordinator` keeps a rolling
+window of RR intervals and computes SDNN (their standard deviation), the
+same statistic behind HealthKit's `heartRateVariabilitySDNN` — a real
+computation, just a simpler rolling window rather than Apple Watch's
+full pipeline.
 
 Cheap/generic bands vary a lot in what they actually implement, and many
 push steps, sleep, and SpO2 through **vendor-specific** services instead
@@ -46,11 +58,12 @@ like LightBlue is the easiest way to find them).
 ## How it talks to Apple Health
 
 `Sources/HealthKit/HealthKitManager.swift` requests read/write access and
-writes heart rate, step count, distance, active energy, blood oxygen, and
-body composition (body fat %, weight, and fat-free mass mapped to
-HealthKit's `leanBodyMass`) as it receives them — these are ordinary
-HealthKit types any app can write, so they show up in Health and count
-toward your existing totals immediately.
+writes heart rate, step count, distance, active energy, blood oxygen,
+body temperature, heart rate variability (SDNN), and body composition
+(body fat %, weight, and fat-free mass mapped to HealthKit's
+`leanBodyMass`) as it receives them — these are ordinary HealthKit types
+any app can write, so they show up in Health and count toward your
+existing totals immediately.
 
 **ECG is not writable by this app, and that's not a bug to fix later.**
 Apple lets any app *read* ECG recordings that are already in Health (e.g.
@@ -61,6 +74,13 @@ capability you can enable in Xcode or a project file. So the Sensors tab
 shows a read-only list of existing ECG recordings (classification +
 average heart rate, via `HealthKitManager.fetchRecentECGs`), and the app
 never attempts to record a new one from band data.
+
+## Appearance
+
+Settings has a Light/Dark/System segmented picker (`AppearanceMode`,
+backed by `@AppStorage`), applied once via `.preferredColorScheme(...)`
+on `RootView`'s `TabView` — every screen and sheet inherits it. "System"
+(the default) follows the device's own appearance setting.
 
 **One real Apple constraint to know about:** `appleExerciseTime`,
 `appleStandTime`, and `appleStandHour` — the data types behind Apple's

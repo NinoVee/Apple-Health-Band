@@ -11,7 +11,7 @@ enum SensorParsers {
     nonisolated static func decode(characteristicUUID: CBUUID, data: Data) -> [SensorReading] {
         switch characteristicUUID {
         case GattCharacteristic.heartRateMeasurement:
-            return heartRate(from: data).map { [$0] } ?? []
+            return heartRate(from: data)
         case GattCharacteristic.batteryLevel:
             return batteryLevel(from: data).map { [$0] } ?? []
         case GattCharacteristic.pulseOximeterMeasurement:
@@ -20,27 +20,53 @@ enum SensorParsers {
             return rscCadenceAndDistance(from: data)
         case GattCharacteristic.bodyCompositionMeasurement:
             return bodyComposition(from: data)
+        case GattCharacteristic.temperatureMeasurement:
+            return bodyTemperature(from: data).map { [$0] } ?? []
         default:
             return []
         }
     }
 
     /// Heart Rate Measurement (0x2A37): flags byte, then an 8- or 16-bit
-    /// beats-per-minute value depending on flag bit 0.
-    nonisolated static func heartRate(from data: Data) -> SensorReading? {
-        guard let flags = data.first else { return nil }
-        let isUInt16 = (flags & 0x01) != 0
+    /// beats-per-minute value (flag bit 0), optional Energy Expended (bit
+    /// 3), then zero or more RR-Interval values (bit 4) — beat-to-beat
+    /// intervals in 1/1024s, the raw data HRV metrics are computed from.
+    /// See `ActivitySyncCoordinator` for how RR intervals become an SDNN
+    /// estimate written to Health as `heartRateVariabilitySDNN`.
+    nonisolated static func heartRate(from data: Data) -> [SensorReading] {
+        guard let flags = data.first else { return [] }
         let base = data.startIndex
-        let value: Double
+        let isUInt16 = (flags & 0x01) != 0
+        let energyExpendedPresent = (flags & 0x08) != 0
+        let rrIntervalPresent = (flags & 0x10) != 0
+        let now = Date()
+
+        let hrValue: Double
+        var offset: Int
         if isUInt16 {
-            guard data.count >= 3 else { return nil }
-            let raw = UInt16(data[base + 1]) | (UInt16(data[base + 2]) << 8)
-            value = Double(raw)
+            guard data.count >= 3 else { return [] }
+            hrValue = Double(UInt16(data[base + 1]) | (UInt16(data[base + 2]) << 8))
+            offset = 3
         } else {
-            guard data.count >= 2 else { return nil }
-            value = Double(data[base + 1])
+            guard data.count >= 2 else { return [] }
+            hrValue = Double(data[base + 1])
+            offset = 2
         }
-        return SensorReading(kind: .heartRate, value: value, unit: "bpm", timestamp: Date())
+
+        var readings = [SensorReading(kind: .heartRate, value: hrValue, unit: "bpm", timestamp: now)]
+
+        if energyExpendedPresent { offset += 2 } // kJ — not surfaced by this app
+
+        if rrIntervalPresent {
+            while data.count >= offset + 2 {
+                let raw = UInt16(data[base + offset]) | (UInt16(data[base + offset + 1]) << 8)
+                offset += 2
+                let milliseconds = Double(raw) / 1024.0 * 1000.0
+                readings.append(SensorReading(kind: .rrInterval, value: milliseconds, unit: "ms", timestamp: now))
+            }
+        }
+
+        return readings
     }
 
     /// Battery Level (0x2A19): a single percentage byte.
@@ -143,6 +169,34 @@ enum SensorParsers {
         // Height, if present, follows here — not surfaced by this app.
 
         return readings
+    }
+
+    /// Health Thermometer Measurement (0x2A1C): flags(1) + temperature
+    /// IEEE-11073 32-bit FLOAT(4) + optional time stamp(7) + optional
+    /// temperature type(1). Always normalized to Celsius.
+    nonisolated static func bodyTemperature(from data: Data) -> SensorReading? {
+        guard data.count >= 5 else { return nil }
+        let base = data.startIndex
+        let flags = data[base]
+        let isFahrenheit = (flags & 0x01) != 0
+        guard let raw = float32(data[(base + 1)...]) else { return nil }
+        let celsius = isFahrenheit ? (raw - 32) * 5.0 / 9.0 : raw
+        return SensorReading(kind: .bodyTemperature, value: celsius, unit: "°C", timestamp: Date())
+    }
+
+    /// IEEE-11073 32-bit FLOAT decode used by temperature measurements: a
+    /// signed 8-bit exponent (byte 3) and signed 24-bit mantissa (bytes
+    /// 0-2, little-endian), value = mantissa * 10^exponent.
+    nonisolated private static func float32(_ data: Data) -> Double? {
+        guard data.count >= 4 else { return nil }
+        let base = data.startIndex
+        let mantissaUnsigned = UInt32(data[base]) | (UInt32(data[base + 1]) << 8) | (UInt32(data[base + 2]) << 16)
+        guard mantissaUnsigned != 0x0080_0000 else { return nil } // NaN
+        var mantissaRaw = mantissaUnsigned
+        if mantissaRaw & 0x0080_0000 != 0 { mantissaRaw |= 0xFF00_0000 } // sign-extend 24-bit to 32-bit
+        let mantissa = Int32(bitPattern: mantissaRaw)
+        let exponent = Int8(bitPattern: data[base + 3])
+        return Double(mantissa) * pow(10.0, Double(exponent))
     }
 
     /// IEEE-11073 16-bit SFLOAT decode used by SpO2 measurements: a 4-bit

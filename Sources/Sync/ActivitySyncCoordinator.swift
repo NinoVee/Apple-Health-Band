@@ -13,13 +13,21 @@ import Combine
 ///   heart rate or a cadence reading (i.e. the wearer was up and moving).
 /// - Step count is cadence (steps/min) integrated over the time since the
 ///   previous cadence sample.
+/// - Heart rate variability (SDNN) is the standard deviation of a rolling
+///   window of RR intervals (beat-to-beat gaps) the band reports
+///   alongside heart rate — a real, standard HRV computation, not a
+///   guess, just windowed rather than a full clinical-grade analysis.
 @MainActor
 final class ActivitySyncCoordinator: ObservableObject {
     @Published private(set) var estimatedExerciseMinutes: Double = 0
     @Published private(set) var estimatedStandHours: Int = 0
+    @Published private(set) var latestHRV: Double?
 
     let exerciseHeartRateThreshold: Double = 100
     let spo2WriteInterval: TimeInterval = 5 * 60
+    let hrvWriteInterval: TimeInterval = 5 * 60
+    let minRRSamplesForHRV = 10
+    let maxRRBufferSize = 300
 
     private let bluetooth: BandBluetoothManager
     private let healthKit: HealthKitManager
@@ -29,6 +37,8 @@ final class ActivitySyncCoordinator: ObservableObject {
     private var lastExerciseCreditTimestamp: Date?
     private var standHoursCredited = Set<Int>()
     private var lastSpo2WriteTime: Date?
+    private var rrIntervalBufferMs: [Double] = []
+    private var lastHRVWriteTime: Date?
     private var currentDay = Calendar.current.startOfDay(for: .now)
 
     init(bluetooth: BandBluetoothManager, healthKit: HealthKitManager) {
@@ -53,11 +63,13 @@ final class ActivitySyncCoordinator: ObservableObject {
                 lastSpo2WriteTime = Date()
                 healthKit.write(reading: reading)
             }
+        case .rrInterval:
+            accumulateHRV(reading)
         case .steps:
             creditStepsFromCadence(reading)
-        case .distance, .bodyFatPercentage, .bodyMass, .leanBodyMass:
+        case .distance, .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature:
             healthKit.write(reading: reading)
-        case .calories, .battery:
+        case .calories, .battery, .heartRateVariability:
             break
         }
         Task { await healthKit.refreshTodayActivity() }
@@ -90,6 +102,29 @@ final class ActivitySyncCoordinator: ObservableObject {
         let estimatedKcal = Double(steps) * 0.04 // rough steps-to-kcal estimate
         healthKit.write(reading: SensorReading(kind: .calories, value: estimatedKcal, unit: "kcal", timestamp: now))
         creditStandHour(at: now)
+    }
+
+    private func accumulateHRV(_ reading: SensorReading) {
+        rrIntervalBufferMs.append(reading.value)
+        if rrIntervalBufferMs.count > maxRRBufferSize {
+            rrIntervalBufferMs.removeFirst(rrIntervalBufferMs.count - maxRRBufferSize)
+        }
+        guard rrIntervalBufferMs.count >= minRRSamplesForHRV else { return }
+
+        let sdnn = Self.standardDeviation(of: rrIntervalBufferMs)
+        latestHRV = sdnn
+
+        let due = lastHRVWriteTime.map { Date().timeIntervalSince($0) > hrvWriteInterval } ?? true
+        guard due else { return }
+        lastHRVWriteTime = Date()
+        healthKit.write(reading: SensorReading(kind: .heartRateVariability, value: sdnn, unit: "ms", timestamp: Date()))
+    }
+
+    private static func standardDeviation(of values: [Double]) -> Double {
+        guard values.count > 1 else { return 0 }
+        let mean = values.reduce(0, +) / Double(values.count)
+        let variance = values.reduce(0) { $0 + pow($1 - mean, 2) } / Double(values.count - 1)
+        return variance.squareRoot()
     }
 
     private func creditStandHour(at date: Date) {
