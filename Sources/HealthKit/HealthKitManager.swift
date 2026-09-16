@@ -11,8 +11,16 @@ import HealthKit
 /// writes to those types. This app reads them (to show real Watch data
 /// when available) but otherwise falls back to its own on-device
 /// estimate computed by `ActivitySyncCoordinator` from band heart-rate
-/// and movement data. Steps, distance, active energy, heart rate, and
-/// blood oxygen are ordinary writable types and sync for real.
+/// and movement data. Steps, distance, active energy, heart rate, blood
+/// oxygen, and body composition (weight/fat %/lean mass) are ordinary
+/// writable types and sync for real.
+///
+/// ECG is a similar Watch-style restriction, but stricter: writing a new
+/// ECG *recording* requires a dedicated entitlement Apple only grants to
+/// reviewed medical-device accessories, via application outside Xcode —
+/// there's no capability toggle for it. So this app only *reads* ECGs
+/// that already exist in Health (see `fetchRecentECGs`), e.g. ones an
+/// Apple Watch recorded; it never attempts to write one from band data.
 @MainActor
 final class HealthKitManager: ObservableObject {
     static let isHealthDataAvailable = HKHealthStore.isHealthDataAvailable()
@@ -23,17 +31,24 @@ final class HealthKitManager: ObservableObject {
     let store = HKHealthStore()
 
     private let writeTypes: Set<HKSampleType> = {
-        let ids: [HKQuantityTypeIdentifier] = [.heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation]
+        let ids: [HKQuantityTypeIdentifier] = [
+            .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation,
+            .bodyFatPercentage, .bodyMass, .leanBodyMass
+        ]
         return Set(ids.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
     }()
 
     private let readTypes: Set<HKObjectType> = {
-        let quantityIDs: [HKQuantityTypeIdentifier] = [.heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation, .appleExerciseTime]
+        let quantityIDs: [HKQuantityTypeIdentifier] = [
+            .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation, .appleExerciseTime,
+            .bodyFatPercentage, .bodyMass, .leanBodyMass
+        ]
         var set = Set<HKObjectType>(quantityIDs.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
         if let standType = HKCategoryType.categoryType(forIdentifier: .appleStandHour) {
             set.insert(standType)
         }
         set.insert(HKObjectType.activitySummaryType())
+        set.insert(HKObjectType.electrocardiogramType()) // read-only — see class doc comment
         return set
     }()
 
@@ -68,6 +83,12 @@ final class HealthKitManager: ObservableObject {
             save(quantity: reading.value, unit: .kilocalorie(), type: .activeEnergyBurned, at: reading.timestamp)
         case .distance:
             save(quantity: reading.value, unit: .meter(), type: .distanceWalkingRunning, at: reading.timestamp)
+        case .bodyFatPercentage:
+            save(quantity: reading.value / 100.0, unit: .percent(), type: .bodyFatPercentage, at: reading.timestamp)
+        case .bodyMass:
+            save(quantity: reading.value, unit: .gramUnit(with: .kilo), type: .bodyMass, at: reading.timestamp)
+        case .leanBodyMass:
+            save(quantity: reading.value, unit: .gramUnit(with: .kilo), type: .leanBodyMass, at: reading.timestamp)
         case .steps, .battery:
             break // steps are written as cumulative totals via writeStepCount; battery is device telemetry only
         }
@@ -164,6 +185,51 @@ final class HealthKitManager: ObservableObject {
                 continuation.resume(returning: stats)
             }
             store.execute(query)
+        }
+    }
+
+    // MARK: - ECG (read-only)
+
+    struct ECGSummary: Identifiable {
+        let id = UUID()
+        let date: Date
+        let classification: String
+        let averageHeartRate: Double?
+    }
+
+    /// Reads ECG recordings already in Health (e.g. from an Apple Watch).
+    /// This app cannot write new ones — see the class doc comment.
+    func fetchRecentECGs(limit: Int = 5) async -> [ECGSummary] {
+        guard isAuthorized else { return [] }
+        let type = HKObjectType.electrocardiogramType()
+        return await withCheckedContinuation { continuation in
+            let sort = [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
+            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: limit, sortDescriptors: sort) { _, samples, _ in
+                let bpmUnit = HKUnit.count().unitDivided(by: .minute())
+                let summaries = (samples as? [HKElectrocardiogram])?.map { sample in
+                    ECGSummary(
+                        date: sample.endDate,
+                        classification: Self.description(for: sample.classification),
+                        averageHeartRate: sample.averageHeartRate?.doubleValue(for: bpmUnit)
+                    )
+                } ?? []
+                continuation.resume(returning: summaries)
+            }
+            store.execute(query)
+        }
+    }
+
+    private static func description(for classification: HKElectrocardiogram.Classification) -> String {
+        switch classification {
+        case .sinusRhythm: return "Sinus Rhythm"
+        case .atrialFibrillation: return "Atrial Fibrillation"
+        case .inconclusiveLowHeartRate: return "Inconclusive — Low Heart Rate"
+        case .inconclusiveHighHeartRate: return "Inconclusive — High Heart Rate"
+        case .inconclusivePoorReading: return "Inconclusive — Poor Reading"
+        case .inconclusiveOther: return "Inconclusive"
+        case .unrecognized: return "Unrecognized"
+        case .notSet: return "Not Set"
+        @unknown default: return "Unknown"
         }
     }
 }

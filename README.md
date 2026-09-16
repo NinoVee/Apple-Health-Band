@@ -16,7 +16,9 @@ syncs the data it collects into Apple Health automatically.
 - **Today** — Move / Exercise / Stand rings, styled after Apple's Activity
   app, plus steps, distance, and live heart rate.
 - **Sensors** — scans for and pairs with a nearby BLE band, shows live
-  heart rate (with a short graph), SpO2, cadence, battery, etc.
+  heart rate (with a short graph), SpO2, cadence, battery, body
+  composition (weight/body fat/lean mass), etc., plus a read-only list of
+  ECG recordings already in Health.
 - **Trends** — 7-day step and active-energy history, read back from Health.
 - **Goals** — editable Move/Exercise/Stand targets, persisted locally.
 - **Settings** — Health authorization status and paired-device management.
@@ -32,6 +34,7 @@ syncs the data it collects into Apple Health automatically.
 | Battery | Battery (`180F`) | Battery Level (`2A19`) |
 | Cadence / distance | Running Speed and Cadence (`1814`) | RSC Measurement (`2A53`) |
 | SpO2 | Pulse Oximeter (`1822`) | Spot-check Measurement (`2A5E`) |
+| Weight / body fat / lean mass | Body Composition (`181B`) | Body Composition Measurement (`2A9C`) |
 
 Cheap/generic bands vary a lot in what they actually implement, and many
 push steps, sleep, and SpO2 through **vendor-specific** services instead
@@ -43,10 +46,21 @@ like LightBlue is the easiest way to find them).
 ## How it talks to Apple Health
 
 `Sources/HealthKit/HealthKitManager.swift` requests read/write access and
-writes heart rate, step count, distance, active energy, and blood oxygen
-as it receives them — these are ordinary HealthKit types any app can
-write, so they show up in Health and count toward your existing totals
-immediately.
+writes heart rate, step count, distance, active energy, blood oxygen, and
+body composition (body fat %, weight, and fat-free mass mapped to
+HealthKit's `leanBodyMass`) as it receives them — these are ordinary
+HealthKit types any app can write, so they show up in Health and count
+toward your existing totals immediately.
+
+**ECG is not writable by this app, and that's not a bug to fix later.**
+Apple lets any app *read* ECG recordings that are already in Health (e.g.
+ones an Apple Watch took), but *writing* a new ECG recording requires a
+dedicated entitlement Apple only grants to reviewed medical-device
+accessory makers through a formal application process — it's not a
+capability you can enable in Xcode or a project file. So the Sensors tab
+shows a read-only list of existing ECG recordings (classification +
+average heart rate, via `HealthKitManager.fetchRecentECGs`), and the app
+never attempts to record a new one from band data.
 
 **One real Apple constraint to know about:** `appleExerciseTime`,
 `appleStandTime`, and `appleStandHour` — the data types behind Apple's

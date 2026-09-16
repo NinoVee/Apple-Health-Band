@@ -55,7 +55,7 @@ final class ActivitySyncCoordinator: ObservableObject {
             }
         case .steps:
             creditStepsFromCadence(reading)
-        case .distance:
+        case .distance, .bodyFatPercentage, .bodyMass, .leanBodyMass:
             healthKit.write(reading: reading)
         case .calories, .battery:
             break

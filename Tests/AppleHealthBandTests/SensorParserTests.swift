@@ -40,6 +40,32 @@ final class SensorParserTests: XCTestCase {
         XCTAssertEqual(readings.last?.value, 100.0)
     }
 
+    func testBodyCompositionFatFreeMassAndWeight() {
+        // flags: fat-free mass present (bit 6, 0x0040) + weight present
+        // (bit 10, 0x0400) = 0x0440, SI units; body fat 23.5% (raw 235);
+        // fat-free mass 60.0kg (raw 12000 @ 0.005kg resolution);
+        // weight 75.0kg (raw 15000 @ 0.005kg resolution).
+        let data = Data([0x40, 0x04, 0xEB, 0x00, 0xE0, 0x2E, 0x98, 0x3A])
+        let readings = SensorParsers.bodyComposition(from: data)
+
+        XCTAssertEqual(readings.count, 3)
+        XCTAssertEqual(readings[0].kind, .bodyFatPercentage)
+        XCTAssertEqual(readings[0].value, 23.5, accuracy: 0.001)
+        XCTAssertEqual(readings[1].kind, .leanBodyMass)
+        XCTAssertEqual(readings[1].value, 60.0, accuracy: 0.001)
+        XCTAssertEqual(readings[2].kind, .bodyMass)
+        XCTAssertEqual(readings[2].value, 75.0, accuracy: 0.001)
+    }
+
+    func testBodyCompositionBodyFatOnly() {
+        // flags: no optional fields; body fat 18.2% (raw 182)
+        let data = Data([0x00, 0x00, 0xB6, 0x00])
+        let readings = SensorParsers.bodyComposition(from: data)
+        XCTAssertEqual(readings.count, 1)
+        XCTAssertEqual(readings.first?.kind, .bodyFatPercentage)
+        XCTAssertEqual(readings.first?.value, 18.2, accuracy: 0.001)
+    }
+
     func testUnknownCharacteristicDecodesToEmpty() {
         let readings = SensorParsers.decode(characteristicUUID: CBUUID(string: "FFFF"), data: Data([1, 2, 3]))
         XCTAssertTrue(readings.isEmpty)

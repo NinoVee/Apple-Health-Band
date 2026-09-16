@@ -7,6 +7,9 @@ enum SensorKind: String, CaseIterable, Hashable {
     case battery
     case calories
     case distance
+    case bodyFatPercentage
+    case bodyMass
+    case leanBodyMass
 }
 
 struct SensorReading: Identifiable, Equatable {

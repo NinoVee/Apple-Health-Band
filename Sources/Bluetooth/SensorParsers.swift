@@ -18,6 +18,8 @@ enum SensorParsers {
             return pulseOximeter(from: data).map { [$0] } ?? []
         case GattCharacteristic.rscMeasurement:
             return rscCadenceAndDistance(from: data)
+        case GattCharacteristic.bodyCompositionMeasurement:
+            return bodyComposition(from: data)
         default:
             return []
         }
@@ -81,6 +83,65 @@ enum SensorParsers {
             let meters = Double(raw) / 10.0
             readings.append(SensorReading(kind: .distance, value: meters, unit: "m", timestamp: Date()))
         }
+        return readings
+    }
+
+    /// Body Composition Measurement (0x2A9C): a 16-bit flags field, then
+    /// body fat percentage (always present), then optional fields in a
+    /// fixed order per the Bluetooth SIG spec — this app only surfaces
+    /// body fat %, fat-free mass (mapped to HealthKit's `leanBodyMass`),
+    /// and weight; basal metabolic rate, muscle %, impedance, and height
+    /// are parsed (to keep offsets correct) but not surfaced.
+    nonisolated static func bodyComposition(from data: Data) -> [SensorReading] {
+        guard data.count >= 4 else { return [] }
+        var offset = data.startIndex
+
+        func readUInt16() -> UInt16? {
+            guard data.count >= offset + 2 else { return nil }
+            let value = UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+            offset += 2
+            return value
+        }
+
+        guard let flags = readUInt16() else { return [] }
+        let imperial = (flags & 0x0001) != 0
+        let hasTimeStamp = (flags & 0x0002) != 0
+        let hasUserID = (flags & 0x0004) != 0
+        let hasBMR = (flags & 0x0008) != 0
+        let hasMusclePercentage = (flags & 0x0010) != 0
+        let hasMuscleMass = (flags & 0x0020) != 0
+        let hasFatFreeMass = (flags & 0x0040) != 0
+        let hasSoftLeanMass = (flags & 0x0080) != 0
+        let hasBodyWaterMass = (flags & 0x0100) != 0
+        let hasImpedance = (flags & 0x0200) != 0
+        let hasWeight = (flags & 0x0400) != 0
+
+        guard let fatPercentRaw = readUInt16() else { return [] }
+        let now = Date()
+        var readings = [SensorReading(kind: .bodyFatPercentage, value: Double(fatPercentRaw) * 0.1, unit: "%", timestamp: now)]
+
+        if hasTimeStamp { offset += 7 }
+        if hasUserID { offset += 1 }
+        if hasBMR { _ = readUInt16() } // kJ — not surfaced by this app
+        if hasMusclePercentage { _ = readUInt16() }
+        if hasMuscleMass { _ = readUInt16() }
+
+        // Mass fields share a resolution: 0.005 kg (SI) or 0.01 lb (imperial).
+        func massInKilograms(_ raw: UInt16) -> Double {
+            imperial ? Double(raw) * 0.01 * 0.45359237 : Double(raw) * 0.005
+        }
+
+        if hasFatFreeMass, let fatFreeMassRaw = readUInt16() {
+            readings.append(SensorReading(kind: .leanBodyMass, value: massInKilograms(fatFreeMassRaw), unit: "kg", timestamp: now))
+        }
+        if hasSoftLeanMass { _ = readUInt16() }
+        if hasBodyWaterMass { _ = readUInt16() }
+        if hasImpedance { _ = readUInt16() } // 0.1 Ohm — not surfaced by this app
+        if hasWeight, let weightRaw = readUInt16() {
+            readings.append(SensorReading(kind: .bodyMass, value: massInKilograms(weightRaw), unit: "kg", timestamp: now))
+        }
+        // Height, if present, follows here — not surfaced by this app.
+
         return readings
     }
 
