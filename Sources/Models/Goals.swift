@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 struct ActivityGoals: Codable, Equatable {
     var moveCalories: Double

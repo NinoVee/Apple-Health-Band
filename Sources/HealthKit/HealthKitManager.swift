@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import HealthKit
 
 /// Bridges band sensor data into Apple Health and reads it back so the
