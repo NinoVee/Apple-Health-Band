@@ -224,7 +224,10 @@ final class HealthKitManager: ObservableObject {
         }
     }
 
-    private static func description(for classification: HKElectrocardiogram.Classification) -> String {
+    /// Pure, stateless mapping — `nonisolated` so it can be called from
+    /// HealthKit's background query-completion callback in `fetchRecentECGs`
+    /// without needing a hop to the main actor.
+    nonisolated private static func description(for classification: HKElectrocardiogram.Classification) -> String {
         switch classification {
         case .sinusRhythm: return "Sinus Rhythm"
         case .atrialFibrillation: return "Atrial Fibrillation"
