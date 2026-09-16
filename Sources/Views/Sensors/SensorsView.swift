@@ -38,6 +38,16 @@ struct SensorsView: View {
                     }
                 }
 
+                if let spo2 = bluetooth.latestReadings[.spo2] {
+                    Section("Blood Oxygen") {
+                        Text("\(Int(spo2.value))%").font(.largeTitle.bold())
+                        let status = spo2Status(spo2.value)
+                        Text(status.label)
+                            .font(.caption)
+                            .foregroundStyle(status.color)
+                    }
+                }
+
                 Section("Live readings") {
                     ForEach(SensorKind.allCases, id: \.self) { kind in
                         if let reading = bluetooth.latestReadings[kind] {
@@ -109,5 +119,15 @@ struct SensorsView: View {
 
     private func formatted(_ value: Double) -> String {
         value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(format: "%.1f", value)
+    }
+
+    /// Typical clinical SpO2 reference ranges — not a diagnosis, just a
+    /// label to make the raw percentage easier to read at a glance.
+    private func spo2Status(_ value: Double) -> (label: String, color: Color) {
+        switch value {
+        case 95...: return ("Normal", .green)
+        case 90..<95: return ("Low", .orange)
+        default: return ("Critical — seek medical attention", .red)
+        }
     }
 }
