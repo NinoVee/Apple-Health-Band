@@ -62,14 +62,20 @@ struct SettingsView: View {
                         Text("If this mentions HealthKit not being available/entitled, check Xcode's Signing & Capabilities tab for a HealthKit row, and confirm you're signed in with a paid Apple Developer account — a free personal-team account cannot use HealthKit at all, on device or in Simulator.")
                     }
                 }
-                Section("Paired band") {
-                    if let device = bluetooth.connectedDevice {
-                        Text(device.name)
-                        Button("Forget this band", role: .destructive) {
-                            bluetooth.disconnect()
-                        }
+                Section("Paired devices") {
+                    if bluetooth.connectedDevices.isEmpty {
+                        Text("No devices paired").foregroundStyle(.secondary)
                     } else {
-                        Text("No band paired").foregroundStyle(.secondary)
+                        ForEach(bluetooth.connectedDevices) { device in
+                            HStack {
+                                Text(device.name)
+                                Spacer()
+                                Button("Forget", role: .destructive) {
+                                    bluetooth.disconnect(device)
+                                }
+                                .font(.caption)
+                            }
+                        }
                     }
                 }
                 Section("About") {

@@ -2,35 +2,48 @@ import Foundation
 import CoreBluetooth
 import Combine
 
-/// Scans for, connects to, and streams sensor data from a Bluetooth LE
-/// smart band. Publishes decoded readings via `readingPublisher` for
-/// `ActivitySyncCoordinator` to relay into Apple Health, and keeps the
-/// latest value per sensor plus a short heart-rate history for the UI.
+/// Scans for, connects to, and streams sensor data from any number of
+/// simultaneous Bluetooth LE health accessories — a wrist band, a
+/// smart scale, a blood pressure cuff, whatever implements the standard
+/// GATT profiles in `GattProfiles.swift`. CoreBluetooth itself has no
+/// problem holding several peripheral connections at once, so this is a
+/// small fleet manager rather than a single-device wrapper: each
+/// peripheral gets its own connection state, but all of them publish
+/// into the same `latestReadings`/`readingPublisher`, since the sensor
+/// kinds a band, scale, and cuff report don't normally overlap (the one
+/// exception, heart rate, just reflects whichever device reported most
+/// recently — the same "latest reading wins" rule already used
+/// everywhere else in the app).
 @MainActor
 final class BandBluetoothManager: NSObject, ObservableObject {
     enum ConnectionState: Equatable {
-        case disconnected
-        case scanning
         case connecting
         case connected
+        case disconnected
         case failed(String)
     }
 
     @Published private(set) var isBluetoothReady = false
+    @Published private(set) var isScanning = false
     @Published private(set) var discoveredDevices: [BandDevice] = []
-    @Published private(set) var connectedDevice: BandDevice?
-    @Published private(set) var connectionState: ConnectionState = .disconnected
+    @Published private(set) var connectedDevices: [BandDevice] = []
+    @Published private(set) var connectionStates: [UUID: ConnectionState] = [:]
     @Published private(set) var latestReadings: [SensorKind: SensorReading] = [:]
     @Published private(set) var heartRateHistory: [SensorReading] = []
 
     let readingPublisher = PassthroughSubject<SensorReading, Never>()
 
     private var central: CBCentralManager!
-    private var peripheral: CBPeripheral?
+    private var peripheralsByID: [UUID: CBPeripheral] = [:]
 
-    private var pairedPeripheralID: UUID? {
-        get { UserDefaults.standard.string(forKey: "pairedPeripheralID").flatMap(UUID.init) }
-        set { UserDefaults.standard.set(newValue?.uuidString, forKey: "pairedPeripheralID") }
+    private var pairedPeripheralIDs: Set<UUID> {
+        get {
+            let strings = UserDefaults.standard.stringArray(forKey: "pairedPeripheralIDs") ?? []
+            return Set(strings.compactMap(UUID.init))
+        }
+        set {
+            UserDefaults.standard.set(newValue.map(\.uuidString), forKey: "pairedPeripheralIDs")
+        }
     }
 
     override init() {
@@ -41,36 +54,45 @@ final class BandBluetoothManager: NSObject, ObservableObject {
     func startScanning() {
         guard isBluetoothReady else { return }
         discoveredDevices.removeAll()
-        connectionState = .scanning
+        isScanning = true
         central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 
     func stopScanning() {
         central.stopScan()
-        if connectionState == .scanning { connectionState = .disconnected }
+        isScanning = false
     }
 
+    /// Connects an additional device without disturbing any devices
+    /// already connected — call this once per accessory (band, scale,
+    /// cuff, ...) you want reporting into the app at the same time.
     func connect(to device: BandDevice) {
         stopScanning()
-        connectionState = .connecting
-        peripheral = device.peripheral
-        peripheral?.delegate = self
+        peripheralsByID[device.id] = device.peripheral
+        device.peripheral.delegate = self
+        connectionStates[device.id] = .connecting
         central.connect(device.peripheral, options: nil)
     }
 
-    func disconnect() {
-        pairedPeripheralID = nil
-        guard let peripheral else { return }
+    func disconnect(_ device: BandDevice) {
+        pairedPeripheralIDs.remove(device.id)
+        guard let peripheral = peripheralsByID[device.id] else { return }
         central.cancelPeripheralConnection(peripheral)
     }
 
-    private func attemptReconnect() {
-        guard let id = pairedPeripheralID else { return }
-        guard let match = central.retrievePeripherals(withIdentifiers: [id]).first else { return }
-        peripheral = match
-        match.delegate = self
-        connectionState = .connecting
-        central.connect(match, options: nil)
+    func connectionState(for device: BandDevice) -> ConnectionState {
+        connectionStates[device.id] ?? .disconnected
+    }
+
+    private func attemptReconnectAll() {
+        let ids = Array(pairedPeripheralIDs)
+        guard !ids.isEmpty else { return }
+        for peripheral in central.retrievePeripherals(withIdentifiers: ids) {
+            peripheralsByID[peripheral.identifier] = peripheral
+            peripheral.delegate = self
+            connectionStates[peripheral.identifier] = .connecting
+            central.connect(peripheral, options: nil)
+        }
     }
 
     fileprivate func record(_ reading: SensorReading) {
@@ -91,9 +113,10 @@ extension BandBluetoothManager: CBCentralManagerDelegate {
         Task { @MainActor in
             isBluetoothReady = state == .poweredOn
             if isBluetoothReady {
-                attemptReconnect()
+                attemptReconnectAll()
             } else {
-                connectionState = .disconnected
+                connectedDevices.removeAll()
+                connectionStates = connectionStates.mapValues { _ in .disconnected }
             }
         }
     }
@@ -104,7 +127,7 @@ extension BandBluetoothManager: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        let name = peripheral.name ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? "Unknown band"
+        let name = peripheral.name ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? "Unknown device"
         let device = BandDevice(id: peripheral.identifier, name: name, rssi: RSSI.intValue, peripheral: peripheral)
         Task { @MainActor in
             if let index = discoveredDevices.firstIndex(where: { $0.id == device.id }) {
@@ -117,27 +140,34 @@ extension BandBluetoothManager: CBCentralManagerDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         let identifier = peripheral.identifier
-        let name = peripheral.name ?? "Band"
+        let name = peripheral.name ?? "Device"
         Task { @MainActor in
-            pairedPeripheralID = identifier
-            connectedDevice = discoveredDevices.first(where: { $0.id == identifier })
+            pairedPeripheralIDs.insert(identifier)
+            let device = discoveredDevices.first(where: { $0.id == identifier })
                 ?? BandDevice(id: identifier, name: name, rssi: 0, peripheral: peripheral)
-            connectionState = .connected
+            if let index = connectedDevices.firstIndex(where: { $0.id == identifier }) {
+                connectedDevices[index] = device
+            } else {
+                connectedDevices.append(device)
+            }
+            connectionStates[identifier] = .connected
             peripheral.discoverServices(GattService.standard + VendorService.custom)
         }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        let identifier = peripheral.identifier
         let message = error?.localizedDescription ?? "Connection failed"
         Task { @MainActor in
-            connectionState = .failed(message)
+            connectionStates[identifier] = .failed(message)
         }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        let identifier = peripheral.identifier
         Task { @MainActor in
-            connectedDevice = nil
-            connectionState = .disconnected
+            connectedDevices.removeAll { $0.id == identifier }
+            connectionStates[identifier] = .disconnected
         }
     }
 }

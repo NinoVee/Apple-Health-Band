@@ -9,9 +9,9 @@ struct DeviceStatusCard: View {
                 .font(.title2)
                 .foregroundStyle(iconColor)
             VStack(alignment: .leading, spacing: 2) {
-                Text(bluetooth.connectedDevice?.name ?? "No band connected")
+                Text(titleText)
                     .font(.subheadline.bold())
-                Text(statusText)
+                Text(subtitleText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -25,29 +25,29 @@ struct DeviceStatusCard: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private var statusText: String {
-        switch bluetooth.connectionState {
-        case .connected: return "Connected · syncing to Health"
-        case .connecting: return "Connecting…"
-        case .scanning: return "Scanning for bands…"
-        case .disconnected: return "Go to Sensors to pair a band"
-        case .failed(let reason): return reason
+    private var titleText: String {
+        switch bluetooth.connectedDevices.count {
+        case 0: return "No devices connected"
+        case 1: return bluetooth.connectedDevices[0].name
+        default: return "\(bluetooth.connectedDevices.count) devices connected"
         }
+    }
+
+    private var subtitleText: String {
+        if bluetooth.connectedDevices.isEmpty {
+            return "Go to Sensors to pair a device"
+        }
+        if bluetooth.connectedDevices.count == 1 {
+            return "Connected · syncing to Health"
+        }
+        return bluetooth.connectedDevices.map(\.name).joined(separator: ", ")
     }
 
     private var iconName: String {
-        switch bluetooth.connectionState {
-        case .connected: return "checkmark.circle.fill"
-        case .connecting, .scanning: return "antenna.radiowaves.left.and.right"
-        default: return "exclamationmark.circle"
-        }
+        bluetooth.connectedDevices.isEmpty ? "exclamationmark.circle" : "checkmark.circle.fill"
     }
 
     private var iconColor: Color {
-        switch bluetooth.connectionState {
-        case .connected: return .green
-        case .failed: return .red
-        default: return .orange
-        }
+        bluetooth.connectedDevices.isEmpty ? .orange : .green
     }
 }

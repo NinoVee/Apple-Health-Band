@@ -10,18 +10,27 @@ struct SensorsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Device") {
+                Section {
                     DeviceStatusCard()
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
-                    Button(bluetooth.connectedDevice == nil ? "Find a band" : "Change band") {
-                        showingScan = true
-                    }
-                    if bluetooth.connectedDevice != nil {
-                        Button("Disconnect", role: .destructive) {
-                            bluetooth.disconnect()
+                    ForEach(bluetooth.connectedDevices) { device in
+                        HStack {
+                            Text(device.name)
+                            Spacer()
+                            Button("Disconnect", role: .destructive) {
+                                bluetooth.disconnect(device)
+                            }
+                            .font(.caption)
                         }
                     }
+                    Button("Add a device") {
+                        showingScan = true
+                    }
+                } header: {
+                    Text("Devices")
+                } footer: {
+                    Text("Pair a band, a scale, and a blood pressure cuff at the same time — each syncs whatever it reports (heart rate, weight, blood pressure, etc.) into the same Health data.")
                 }
 
                 if let heartRate = bluetooth.latestReadings[.heartRate] {

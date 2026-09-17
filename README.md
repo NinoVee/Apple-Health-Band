@@ -36,7 +36,29 @@ syncs the data it collects into Apple Health automatically.
   status, paired-device management, a Light/Dark/System appearance
   toggle, and AI Insights configuration.
 
-## How it talks to your band
+## How it talks to your devices
+
+`Sources/Bluetooth/BandBluetoothManager.swift` can hold **several
+simultaneous connections** — a wrist band, a smart scale, and a blood
+pressure cuff can all be paired and reporting into the app at once.
+CoreBluetooth itself has no problem with multiple concurrent peripheral
+connections; `BandBluetoothManager` tracks connection state per device
+(`connectionStates: [UUID: ConnectionState]`) and persists every paired
+device's ID so all of them reconnect automatically on next launch, not
+just the most recent one. Since the parsers below key off the
+*characteristic*, not which physical product sent it, a scale
+implementing the standard Body Composition Service and a cuff
+implementing the standard Blood Pressure Service work with the exact
+same decoding code as the band — no per-device-type logic needed. Go to
+Sensors → **Add a device** once per accessory to pair each one; they all
+stay connected together, and each just syncs whatever it reports.
+
+The one shared bit of state across devices is `latestReadings` — if two
+connected devices report the *same* kind of reading (e.g. a wrist band's
+PPG heart rate and a cuff's pulse rate), the more recent one simply wins,
+same "latest reading" rule the rest of the app already uses. In
+practice this rarely matters since a band, scale, and cuff mostly report
+non-overlapping kinds.
 
 `Sources/Bluetooth` implements a generic Core Bluetooth client for the
 **standard Bluetooth SIG GATT profiles** most fitness bands expose:

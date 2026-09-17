@@ -8,7 +8,7 @@ struct DeviceScanView: View {
         NavigationStack {
             List {
                 if !bluetooth.isBluetoothReady {
-                    Text("Turn on Bluetooth to scan for your band.")
+                    Text("Turn on Bluetooth to scan for devices.")
                         .foregroundStyle(.secondary)
                 } else if bluetooth.discoveredDevices.isEmpty {
                     HStack {
@@ -17,9 +17,10 @@ struct DeviceScanView: View {
                     }
                 }
                 ForEach(bluetooth.discoveredDevices) { device in
+                    let isConnected = bluetooth.connectedDevices.contains(device)
                     Button {
+                        guard !isConnected else { return }
                         bluetooth.connect(to: device)
-                        dismiss()
                     } label: {
                         HStack {
                             VStack(alignment: .leading) {
@@ -27,15 +28,20 @@ struct DeviceScanView: View {
                                 Text("RSSI \(device.rssi) dBm").font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                            if isConnected {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                            } else {
+                                Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                            }
                         }
                     }
+                    .disabled(isConnected)
                 }
             }
-            .navigationTitle("Nearby Bands")
+            .navigationTitle("Nearby Devices")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    Button("Done") { dismiss() }
                 }
             }
             .onAppear { bluetooth.startScanning() }
