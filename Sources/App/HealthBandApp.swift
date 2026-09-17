@@ -5,6 +5,7 @@ struct HealthBandApp: App {
     @StateObject private var bluetooth: BandBluetoothManager
     @StateObject private var healthKit: HealthKitManager
     @StateObject private var goalsStore = GoalsStore()
+    @StateObject private var scaleLogStore = ScaleLogStore()
     @StateObject private var coordinator: ActivitySyncCoordinator
 
     init() {
@@ -21,6 +22,7 @@ struct HealthBandApp: App {
                 .environmentObject(bluetooth)
                 .environmentObject(healthKit)
                 .environmentObject(goalsStore)
+                .environmentObject(scaleLogStore)
                 .environmentObject(coordinator)
                 .task {
                     await healthKit.requestAuthorization()

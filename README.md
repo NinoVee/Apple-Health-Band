@@ -20,7 +20,14 @@ syncs the data it collects into Apple Health automatically.
   cadence, battery, body temperature, body composition (weight/body
   fat/lean mass), etc., plus a read-only list of ECG recordings already
   in Health.
-- **Trends** — 7-day step and active-energy history, read back from Health.
+- **Trends** — step and active-energy history, read back from Health,
+  with a Week/Month/Year range picker (daily bars for Week/Month,
+  monthly bars for Year).
+- **Scale** — a manually-logged smart-scale history: weight, height,
+  BMI, body fat %, fat-free body weight, muscle mass, bone mass,
+  visceral fat, subcutaneous fat, and basal metabolic rate, plus a
+  weight-over-time chart. See "Scale log" below for what syncs to
+  Health vs. what stays local.
 - **Goals** — editable Move/Exercise/Stand targets, persisted locally.
 - **AI Insights** — a chat tab where you can ask Claude or ChatGPT about
   your Health data. Off by default; see "AI Insights" below.
@@ -103,6 +110,30 @@ Steps written by the app are Health's real, shared `stepCount` type, so a
 Watch or other app's steps and this app's band-derived steps combine into
 one daily total, same as Health does for any two sources.
 
+## Scale log
+
+The Scale tab (`Sources/Views/Scale/`) is a manual entry log — this app
+doesn't talk to a body-composition scale over Bluetooth, since those are
+almost always Wi-Fi/cloud devices (Withings, Renpho, etc.) tied to their
+own manufacturer app, not exposed over BLE the way a wrist band's sensors
+are. You type in what the scale's own app shows you.
+
+**What syncs to Apple Health** (real HealthKit quantity types any app can
+write): weight, height, BMI, body fat %, fat-free body weight (mapped to
+`leanBodyMass`), and basal metabolic rate (mapped to `basalEnergyBurned`).
+
+**What stays in this app's own log only:** muscle mass, bone mass,
+visceral fat rating, and subcutaneous fat %. This isn't a missing
+feature to fix — Apple Health simply has no data type for any of these,
+for any app, so there's nothing to sync them *to*. `ScaleLogStore`
+persists the full entry (all fields) locally via `UserDefaults` so
+they're still tracked and chartable inside the app.
+
+Entries are logged in either Metric or Imperial units in the form; a
+"Calculate BMI from weight & height" button offers `ScaleEntry`'s BMI
+formula as a convenience, but you can always type in the exact value
+your scale displayed instead — its formula may differ slightly.
+
 ## AI Insights
 
 A chat tab (`Sources/Views/Insights/HealthChatView.swift`) where you can
@@ -121,9 +152,10 @@ built-in server.
 
 **What actually gets sent:** on each message, `HealthContextBuilder`
 builds a plain-text summary from the same aggregate numbers already
-shown on the Today/Sensors tabs (steps, heart rate, SpO2, body
-composition, etc.) — never raw HealthKit samples — plus the visible
-chat conversation. `Settings → AI Insights` also has a Shared Secret
+shown on the Today/Sensors/Scale tabs (steps, heart rate, SpO2, body
+composition, your latest scale log entry, etc.) — never raw HealthKit
+samples — plus the visible chat conversation. `Settings → AI Insights`
+also has a Shared Secret
 field: it's a weaker, app-side secret (separate from your real API
 keys) that just keeps random internet traffic off your relay endpoint;
 set the same value in both places.
@@ -137,12 +169,14 @@ advice; the relay's system prompt tells the model the same thing.
 ```
 Sources/
   App/            App entry point, root TabView
-  Models/         Plain data types (SensorReading, DailyActivity, Goals, BandDevice, ...)
+  Models/         Plain data types (SensorReading, DailyActivity, Goals, BandDevice,
+                   ScaleEntry/ScaleLogStore, TrendRange, ...)
   Bluetooth/       CBCentralManager wrapper, GATT UUIDs, characteristic parsers
-  HealthKit/       HKHealthStore wrapper: auth, writes, today's totals, 7-day history
+  HealthKit/       HKHealthStore wrapper: auth, writes, today's totals, Trends history
   Sync/           Glues Bluetooth readings -> HealthKit writes + ring/HRV estimates
   AI/             Health summary builder, relay client, chat view model
-  Views/          Today / Sensors / Trends / Goals / Insights / Settings, one folder each
+  Views/          Today / Sensors / Trends / Scale / Goals / Insights / Settings,
+                   one folder each
   Extensions/
   Resources/      Assets.xcassets (add your own AppIcon image — a 1024x1024
                    slot is scaffolded but empty)

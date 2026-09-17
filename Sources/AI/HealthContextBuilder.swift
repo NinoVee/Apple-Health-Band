@@ -9,7 +9,8 @@ enum HealthContextBuilder {
     static func summary(
         healthKit: HealthKitManager,
         bluetooth: BandBluetoothManager,
-        coordinator: ActivitySyncCoordinator
+        coordinator: ActivitySyncCoordinator,
+        scaleLog: ScaleLogStore
     ) -> String {
         let activity = healthKit.todayActivity
         var lines: [String] = ["Today's activity, from Apple Health (combines this band with any other source, e.g. Apple Watch):"]
@@ -40,6 +41,20 @@ enum HealthContextBuilder {
         }
         if let leanMass = bluetooth.latestReadings[.leanBodyMass] {
             lines.append("- Lean body mass: \(String(format: "%.1f", leanMass.value)) kg")
+        }
+
+        if let scale = scaleLog.latest {
+            lines.append("\nMost recent manually-logged scale reading (\(scale.date.formatted(date: .abbreviated, time: .omitted))):")
+            if let weight = scale.weightKg { lines.append("- Weight: \(String(format: "%.1f", weight)) kg") }
+            if let height = scale.heightCm { lines.append("- Height: \(String(format: "%.1f", height)) cm") }
+            if let bmi = scale.bmi { lines.append("- BMI: \(String(format: "%.1f", bmi))") }
+            if let fat = scale.bodyFatPercentage { lines.append("- Body fat: \(String(format: "%.1f", fat))%") }
+            if let leanWeight = scale.fatFreeBodyWeightKg { lines.append("- Fat-free body weight: \(String(format: "%.1f", leanWeight)) kg") }
+            if let muscle = scale.muscleMassKg { lines.append("- Muscle mass: \(String(format: "%.1f", muscle)) kg") }
+            if let bone = scale.boneMassKg { lines.append("- Bone mass: \(String(format: "%.1f", bone)) kg") }
+            if let visceral = scale.visceralFatRating { lines.append("- Visceral fat rating: \(String(format: "%.1f", visceral))") }
+            if let subcutaneous = scale.subcutaneousFatPercentage { lines.append("- Subcutaneous fat: \(String(format: "%.1f", subcutaneous))%") }
+            if let bmr = scale.basalMetabolicRateKcal { lines.append("- Basal metabolic rate: \(Int(bmr)) kcal") }
         }
 
         return lines.joined(separator: "\n")

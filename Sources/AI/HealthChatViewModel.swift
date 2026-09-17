@@ -15,11 +15,13 @@ final class HealthChatViewModel: ObservableObject {
     private let healthKit: HealthKitManager
     private let bluetooth: BandBluetoothManager
     private let coordinator: ActivitySyncCoordinator
+    private let scaleLog: ScaleLogStore
 
-    init(healthKit: HealthKitManager, bluetooth: BandBluetoothManager, coordinator: ActivitySyncCoordinator) {
+    init(healthKit: HealthKitManager, bluetooth: BandBluetoothManager, coordinator: ActivitySyncCoordinator, scaleLog: ScaleLogStore) {
         self.healthKit = healthKit
         self.bluetooth = bluetooth
         self.coordinator = coordinator
+        self.scaleLog = scaleLog
     }
 
     func send() {
@@ -37,7 +39,7 @@ final class HealthChatViewModel: ObservableObject {
 
         let provider = AIInsightsSettings.provider
         let sharedSecret = AIInsightsSettings.sharedSecret
-        let context = HealthContextBuilder.summary(healthKit: healthKit, bluetooth: bluetooth, coordinator: coordinator)
+        let context = HealthContextBuilder.summary(healthKit: healthKit, bluetooth: bluetooth, coordinator: coordinator, scaleLog: scaleLog)
         let conversation = messages
 
         Task {

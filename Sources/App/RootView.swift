@@ -11,6 +11,8 @@ struct RootView: View {
                 .tabItem { Label("Sensors", systemImage: "waveform.path.ecg") }
             TrendsView()
                 .tabItem { Label("Trends", systemImage: "chart.xyaxis.line") }
+            ScaleView()
+                .tabItem { Label("Scale", systemImage: "scalemass") }
             GoalsView()
                 .tabItem { Label("Goals", systemImage: "target") }
             HealthChatView()

@@ -4,6 +4,7 @@ struct HealthChatView: View {
     @EnvironmentObject var healthKit: HealthKitManager
     @EnvironmentObject var bluetooth: BandBluetoothManager
     @EnvironmentObject var coordinator: ActivitySyncCoordinator
+    @EnvironmentObject var scaleLog: ScaleLogStore
     @AppStorage("aiInsightsEnabled") private var isEnabled = false
     @AppStorage("aiProvider") private var provider: AIProvider = .claude
     @State private var viewModel: HealthChatViewModel?
@@ -32,7 +33,7 @@ struct HealthChatView: View {
         }
         .onAppear {
             if viewModel == nil {
-                viewModel = HealthChatViewModel(healthKit: healthKit, bluetooth: bluetooth, coordinator: coordinator)
+                viewModel = HealthChatViewModel(healthKit: healthKit, bluetooth: bluetooth, coordinator: coordinator, scaleLog: scaleLog)
             }
         }
     }

@@ -13,8 +13,14 @@ import HealthKit
 /// estimate computed by `ActivitySyncCoordinator` from band heart-rate
 /// and movement data. Steps, distance, active energy, heart rate, blood
 /// oxygen, body temperature, heart rate variability (SDNN, computed from
-/// the band's RR intervals), and body composition (weight/fat %/lean
-/// mass) are ordinary writable types and sync for real.
+/// the band's RR intervals), height, BMI, basal energy burned, and body
+/// composition (weight/fat %/lean mass) are ordinary writable types and
+/// sync for real.
+///
+/// Muscle mass, bone mass, visceral fat, and subcutaneous fat have no
+/// matching HealthKit quantity type at all — not a permissions issue,
+/// there's simply no such type to write to. `ScaleLogStore` keeps those
+/// in this app's own local log instead of pretending to sync them.
 ///
 /// ECG is a similar Watch-style restriction, but stricter: writing a new
 /// ECG *recording* requires a dedicated entitlement Apple only grants to
@@ -34,7 +40,8 @@ final class HealthKitManager: ObservableObject {
     private let writeTypes: Set<HKSampleType> = {
         let ids: [HKQuantityTypeIdentifier] = [
             .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation,
-            .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN
+            .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN,
+            .height, .bodyMassIndex, .basalEnergyBurned
         ]
         return Set(ids.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
     }()
@@ -42,7 +49,8 @@ final class HealthKitManager: ObservableObject {
     private let readTypes: Set<HKObjectType> = {
         let quantityIDs: [HKQuantityTypeIdentifier] = [
             .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation, .appleExerciseTime,
-            .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN
+            .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN,
+            .height, .bodyMassIndex, .basalEnergyBurned
         ]
         var set = Set<HKObjectType>(quantityIDs.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
         if let standType = HKCategoryType.categoryType(forIdentifier: .appleStandHour) {
@@ -163,7 +171,12 @@ final class HealthKitManager: ObservableObject {
 
     // MARK: - Trends
 
-    func fetchDailyHistory(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, days: Int) async -> [DailyStat] {
+    func fetchHistory(
+        for identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        days: Int,
+        intervalComponents: DateComponents
+    ) async -> [DailyStat] {
         guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
         let calendar = Calendar.current
         let startOfToday = calendar.startOfDay(for: .now)
@@ -172,14 +185,12 @@ final class HealthKitManager: ObservableObject {
 
         return await withCheckedContinuation { continuation in
             let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
-            var interval = DateComponents()
-            interval.day = 1
             let query = HKStatisticsCollectionQuery(
                 quantityType: type,
                 quantitySamplePredicate: predicate,
                 options: .cumulativeSum,
                 anchorDate: startOfToday,
-                intervalComponents: interval
+                intervalComponents: intervalComponents
             )
             query.initialResultsHandler = { _, results, _ in
                 var stats: [DailyStat] = []
@@ -190,6 +201,33 @@ final class HealthKitManager: ObservableObject {
                 continuation.resume(returning: stats)
             }
             store.execute(query)
+        }
+    }
+
+    // MARK: - Scale log
+
+    /// Writes the subset of a `ScaleEntry` that has a matching HealthKit
+    /// type. Muscle mass, bone mass, visceral fat, and subcutaneous fat
+    /// have none, so they're skipped here — see the class doc comment.
+    func writeScaleEntry(_ entry: ScaleEntry) {
+        guard isAuthorized else { return }
+        if let weightKg = entry.weightKg {
+            save(quantity: weightKg, unit: .gramUnit(with: .kilo), type: .bodyMass, at: entry.date)
+        }
+        if let heightCm = entry.heightCm {
+            save(quantity: heightCm / 100.0, unit: .meter(), type: .height, at: entry.date)
+        }
+        if let bmi = entry.bmi {
+            save(quantity: bmi, unit: .count(), type: .bodyMassIndex, at: entry.date)
+        }
+        if let bodyFatPercentage = entry.bodyFatPercentage {
+            save(quantity: bodyFatPercentage / 100.0, unit: .percent(), type: .bodyFatPercentage, at: entry.date)
+        }
+        if let fatFreeBodyWeightKg = entry.fatFreeBodyWeightKg {
+            save(quantity: fatFreeBodyWeightKg, unit: .gramUnit(with: .kilo), type: .leanBodyMass, at: entry.date)
+        }
+        if let basalMetabolicRateKcal = entry.basalMetabolicRateKcal {
+            save(quantity: basalMetabolicRateKcal, unit: .kilocalorie(), type: .basalEnergyBurned, at: entry.date)
         }
     }
 
