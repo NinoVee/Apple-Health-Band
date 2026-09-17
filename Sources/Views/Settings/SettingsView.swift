@@ -20,6 +20,7 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+                GoalsSections()
                 Section {
                     Toggle("Enable AI Insights", isOn: $aiInsightsEnabled)
                     if aiInsightsEnabled {

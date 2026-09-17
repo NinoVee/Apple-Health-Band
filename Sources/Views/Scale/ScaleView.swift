@@ -1,56 +1,39 @@
 import SwiftUI
 import Charts
 
-struct ScaleView: View {
-    @EnvironmentObject var healthKit: HealthKitManager
+/// Content for the Scale section of the Trends tab. The "+" toolbar
+/// button and its sheet live in `TrendsView` (the shared nav container),
+/// so this is just the list/chart content.
+struct ScaleLogView: View {
     @EnvironmentObject var store: ScaleLogStore
-    @State private var showingForm = false
 
     var body: some View {
-        NavigationStack {
-            List {
-                if store.entries.contains(where: { $0.weightKg != nil }) {
-                    Section("Weight trend") {
-                        Chart(store.entries.reversed()) { entry in
-                            if let weight = entry.weightKg {
-                                LineMark(
-                                    x: .value("Date", entry.date),
-                                    y: .value("Weight", weight)
-                                )
-                                .foregroundStyle(.blue)
-                                .interpolationMethod(.catmullRom)
-                            }
+        List {
+            if store.entries.contains(where: { $0.weightKg != nil }) {
+                Section("Weight trend") {
+                    Chart(store.entries.reversed()) { entry in
+                        if let weight = entry.weightKg {
+                            LineMark(
+                                x: .value("Date", entry.date),
+                                y: .value("Weight", weight)
+                            )
+                            .foregroundStyle(.blue)
+                            .interpolationMethod(.catmullRom)
                         }
-                        .frame(height: 160)
                     }
+                    .frame(height: 160)
                 }
+            }
 
-                Section("History") {
-                    if store.entries.isEmpty {
-                        Text("No scale readings logged yet. Tap + to add one.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(store.entries) { entry in
-                            ScaleEntryRow(entry: entry)
-                        }
-                        .onDelete(perform: store.delete)
+            Section("History") {
+                if store.entries.isEmpty {
+                    Text("No scale readings logged yet. Tap + to add one.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.entries) { entry in
+                        ScaleEntryRow(entry: entry)
                     }
-                }
-            }
-            .navigationTitle("Scale")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingForm = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-            .sheet(isPresented: $showingForm) {
-                ScaleEntryFormView { entry in
-                    store.add(entry)
-                    healthKit.writeScaleEntry(entry)
+                    .onDelete(perform: store.delete)
                 }
             }
         }

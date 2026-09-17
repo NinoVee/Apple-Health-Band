@@ -27,7 +27,13 @@ final class HealthInsightsRelayClient {
         let payload: [String: Any] = [
             "provider": provider.rawValue,
             "healthContext": healthContext,
-            "messages": conversation.map { ["role": $0.role.rawValue, "content": $0.content] }
+            "messages": conversation.map { message -> [String: Any] in
+                var dict: [String: Any] = ["role": message.role.rawValue, "content": message.content]
+                if let imageData = message.imageData {
+                    dict["imageBase64"] = imageData.base64EncodedString()
+                }
+                return dict
+            }
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 

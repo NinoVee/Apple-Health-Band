@@ -44,7 +44,7 @@ async function callClaude(healthContext, messages) {
       model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-5',
       max_tokens: 1024,
       system: `${SYSTEM_PROMPT}\n\nHealth data summary:\n${healthContext || 'No data provided.'}`,
-      messages: messages.map((m) => ({ role: m.role, content: m.content }))
+      messages: messages.map(toClaudeMessage)
     })
   });
 
@@ -53,6 +53,19 @@ async function callClaude(healthContext, messages) {
   }
   const data = await response.json();
   return (data.content || []).map((block) => block.text || '').join('');
+}
+
+function toClaudeMessage(m) {
+  if (!m.imageBase64) {
+    return { role: m.role, content: m.content };
+  }
+  const blocks = [];
+  if (m.content) blocks.push({ type: 'text', text: m.content });
+  blocks.push({
+    type: 'image',
+    source: { type: 'base64', media_type: 'image/jpeg', data: m.imageBase64 }
+  });
+  return { role: m.role, content: blocks };
 }
 
 async function callChatGPT(healthContext, messages) {
@@ -69,7 +82,7 @@ async function callChatGPT(healthContext, messages) {
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: [
         { role: 'system', content: `${SYSTEM_PROMPT}\n\nHealth data summary:\n${healthContext || 'No data provided.'}` },
-        ...messages.map((m) => ({ role: m.role, content: m.content }))
+        ...messages.map(toOpenAIMessage)
       ]
     })
   });
@@ -79,4 +92,17 @@ async function callChatGPT(healthContext, messages) {
   }
   const data = await response.json();
   return data.choices?.[0]?.message?.content || '';
+}
+
+function toOpenAIMessage(m) {
+  if (!m.imageBase64) {
+    return { role: m.role, content: m.content };
+  }
+  const blocks = [];
+  if (m.content) blocks.push({ type: 'text', text: m.content });
+  blocks.push({
+    type: 'image_url',
+    image_url: { url: `data:image/jpeg;base64,${m.imageBase64}` }
+  });
+  return { role: m.role, content: blocks };
 }

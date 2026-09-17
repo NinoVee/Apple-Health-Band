@@ -47,7 +47,12 @@ Anthropic and OpenAI account dashboards directly, not just here.
 ## What gets sent
 
 The app sends a short text summary built from the same numbers already
-shown on the Today/Sensors tabs (steps, heart rate, SpO2, body
+shown on the Today/Sensors/Scale tabs (steps, heart rate, SpO2, body
 composition, etc. — see `Sources/AI/HealthContextBuilder.swift`), plus
 the visible chat conversation. It never sends raw HealthKit samples or
 anything beyond what's already displayed in the app.
+
+If the user attaches a photo, it arrives here as `imageBase64` on that
+message (downscaled/compressed on-device first) and this relay forwards
+it as an image content block to whichever provider is selected — see
+`toClaudeMessage`/`toOpenAIMessage` in `api/chat.js`.

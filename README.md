@@ -20,19 +20,21 @@ syncs the data it collects into Apple Health automatically.
   cadence, battery, body temperature, body composition (weight/body
   fat/lean mass), etc., plus a read-only list of ECG recordings already
   in Health.
-- **Trends** — step and active-energy history, read back from Health,
-  with a Week/Month/Year range picker (daily bars for Week/Month,
-  monthly bars for Year).
-- **Scale** — a manually-logged smart-scale history: weight, height,
-  BMI, body fat %, fat-free body weight, muscle mass, bone mass,
-  visceral fat, subcutaneous fat, and basal metabolic rate, plus a
-  weight-over-time chart. See "Scale log" below for what syncs to
-  Health vs. what stays local.
-- **Goals** — editable Move/Exercise/Stand targets, persisted locally.
+- **Trends** — a segmented Activity/Scale switcher in the nav bar:
+  - *Activity*: step and active-energy history, read back from Health,
+    with a Week/Month/Year range picker (daily bars for Week/Month,
+    monthly bars for Year).
+  - *Scale*: a manually-logged smart-scale history — weight, height,
+    BMI, body fat %, fat-free body weight, muscle mass, bone mass,
+    visceral fat, subcutaneous fat, and basal metabolic rate, plus a
+    weight-over-time chart. See "Scale log" below for what syncs to
+    Health vs. what stays local.
 - **AI Insights** — a chat tab where you can ask Claude or ChatGPT about
-  your Health data. Off by default; see "AI Insights" below.
-- **Settings** — Health authorization status, paired-device management,
-  a Light/Dark/System appearance toggle, and AI Insights configuration.
+  your Health data, with optional photo attachments. Off by default;
+  see "AI Insights" below.
+- **Settings** — Move/Exercise/Stand goal editors, Health authorization
+  status, paired-device management, a Light/Dark/System appearance
+  toggle, and AI Insights configuration.
 
 ## How it talks to your band
 
@@ -112,7 +114,8 @@ one daily total, same as Health does for any two sources.
 
 ## Scale log
 
-The Scale tab (`Sources/Views/Scale/`) is a manual entry log — this app
+The Scale section of Trends (`Sources/Views/Scale/`) is a manual entry
+log — this app
 doesn't talk to a body-composition scale over Bluetooth, since those are
 almost always Wi-Fi/cloud devices (Withings, Renpho, etc.) tied to their
 own manufacturer app, not exposed over BLE the way a wrist band's sensors
@@ -160,9 +163,21 @@ field: it's a weaker, app-side secret (separate from your real API
 keys) that just keeps random internet traffic off your relay endpoint;
 set the same value in both places.
 
-This sends health information to a third-party AI service by design —
-that's the feature. Treat its answers as informational, not medical
-advice; the relay's system prompt tells the model the same thing.
+**Photo attachments:** tap the photo icon next to the text field to
+attach a picture from your library (via `PhotosPicker` — no photo
+library permission prompt needed, since it runs out-of-process). It's
+downscaled and JPEG-compressed on-device (`ImageResizer`, max 1024px,
+~0.7 quality) before sending, then included as an image block in the
+relay's request — both `claude-sonnet-4-5` and `gpt-4o-mini` (the
+default models) accept image input, so no model change was needed.
+Chat history, images included, lives only in memory for the session —
+nothing is written to disk, and it clears when you tap Clear Chat or
+relaunch the app.
+
+This sends health information (and, if you attach one, a photo) to a
+third-party AI service by design — that's the feature. Treat its
+answers as informational, not medical advice; the relay's system
+prompt tells the model the same thing.
 
 ## Project structure
 
@@ -174,9 +189,9 @@ Sources/
   Bluetooth/       CBCentralManager wrapper, GATT UUIDs, characteristic parsers
   HealthKit/       HKHealthStore wrapper: auth, writes, today's totals, Trends history
   Sync/           Glues Bluetooth readings -> HealthKit writes + ring/HRV estimates
-  AI/             Health summary builder, relay client, chat view model
-  Views/          Today / Sensors / Trends / Scale / Goals / Insights / Settings,
-                   one folder each
+  AI/             Health summary builder, relay client, chat view model, image resizer
+  Views/          Today / Sensors / Trends / Scale / Goals / Insights / Settings folders —
+                   Scale and Goals are embedded in Trends and Settings, not their own tabs
   Extensions/
   Resources/      Assets.xcassets (add your own AppIcon image — a 1024x1024
                    slot is scaffolded but empty)

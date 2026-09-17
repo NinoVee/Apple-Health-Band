@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 struct HealthChatView: View {
     @EnvironmentObject var healthKit: HealthKitManager
@@ -45,7 +47,7 @@ struct HealthChatView: View {
                 .foregroundStyle(.secondary)
             Text("AI Insights is off")
                 .font(.headline)
-            Text("Turn this on in Settings → AI Insights. Once enabled, sending a message here sends a text summary of your Health data to \(provider.label) through your own relay server — nothing is sent automatically or in the background.")
+            Text("Turn this on in Settings → AI Insights. Once enabled, sending a message here (with an optional photo) sends a text summary of your Health data to \(provider.label) through your own relay server — nothing is sent automatically or in the background.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -58,6 +60,7 @@ struct HealthChatView: View {
 private struct ChatContentView: View {
     @ObservedObject var viewModel: HealthChatViewModel
     let providerLabel: String
+    @State private var photoPickerItem: PhotosPickerItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -96,7 +99,32 @@ private struct ChatContentView: View {
                 }
             }
             Divider()
+            if let pendingImageData = viewModel.pendingImageData, let uiImage = UIImage(data: pendingImageData) {
+                HStack {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    Text("Photo attached")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        viewModel.pendingImageData = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
             HStack {
+                PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.title2)
+                }
                 TextField("Ask about your health data…", text: $viewModel.draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...4)
@@ -107,9 +135,23 @@ private struct ChatContentView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
                 }
-                .disabled(viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isSending)
+                .disabled(
+                    (viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && viewModel.pendingImageData == nil)
+                        || viewModel.isSending
+                )
             }
             .padding()
+        }
+        .onChange(of: photoPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data),
+                   let resized = ImageResizer.resizedJPEGData(from: image) {
+                    viewModel.pendingImageData = resized
+                }
+                photoPickerItem = nil
+            }
         }
     }
 }
@@ -120,12 +162,23 @@ private struct ChatBubble: View {
     var body: some View {
         HStack {
             if message.role == .user { Spacer(minLength: 40) }
-            Text(message.content)
-                .padding(10)
-                .background(
-                    message.role == .user ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 12)
-                )
+            VStack(alignment: .leading, spacing: 6) {
+                if let imageData = message.imageData, let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 200, maxHeight: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                if !message.content.isEmpty {
+                    Text(message.content)
+                }
+            }
+            .padding(10)
+            .background(
+                message.role == .user ? Color.accentColor.opacity(0.2) : Color(.secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
             if message.role == .assistant { Spacer(minLength: 40) }
         }
         .padding(.horizontal)

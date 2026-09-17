@@ -8,6 +8,7 @@ import Foundation
 final class HealthChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var draft: String = ""
+    @Published var pendingImageData: Data?
     @Published private(set) var isSending = false
     @Published var errorMessage: String?
 
@@ -26,14 +27,15 @@ final class HealthChatViewModel: ObservableObject {
 
     func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !isSending else { return }
+        guard !text.isEmpty || pendingImageData != nil, !isSending else { return }
         guard let url = URL(string: AIInsightsSettings.relayURLString) else {
             errorMessage = "Set a valid Relay URL in Settings → AI Insights first."
             return
         }
 
-        messages.append(ChatMessage(role: .user, content: text))
+        messages.append(ChatMessage(role: .user, content: text, imageData: pendingImageData))
         draft = ""
+        pendingImageData = nil
         errorMessage = nil
         isSending = true
 
