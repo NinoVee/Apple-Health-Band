@@ -40,7 +40,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Off by default. When enabled, sending a message in the AI Insights tab sends a text summary of your recent Health data — not raw records — to your own relay server (see Server/ in the repo), which forwards it to \(aiProvider.label). Nothing is sent automatically. \(aiProvider.label) is a third-party AI service, not a medical professional.")
                 }
-                Section("Apple Health") {
+                Section {
                     HStack {
                         Text("Status")
                         Spacer()
@@ -49,6 +49,17 @@ struct SettingsView: View {
                     }
                     Button("Request Health access") {
                         Task { await healthKit.requestAuthorization() }
+                    }
+                    if let error = healthKit.authorizationError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Apple Health")
+                } footer: {
+                    if healthKit.authorizationError != nil {
+                        Text("If this mentions HealthKit not being available/entitled, check Xcode's Signing & Capabilities tab for a HealthKit row, and confirm you're signed in with a paid Apple Developer account — a free personal-team account cannot use HealthKit at all, on device or in Simulator.")
                     }
                 }
                 Section("Paired band") {

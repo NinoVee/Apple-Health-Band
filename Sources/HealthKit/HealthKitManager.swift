@@ -34,6 +34,11 @@ final class HealthKitManager: ObservableObject {
 
     @Published private(set) var isAuthorized = false
     @Published var todayActivity = DailyActivity()
+    /// Set when `requestAuthorization` throws, so a silent HealthKit
+    /// failure (missing entitlement, personal-team signing, no Health
+    /// app on this device) is visible somewhere other than Xcode's
+    /// console — see the "Apple Health" section in Settings.
+    @Published private(set) var authorizationError: String?
 
     let store = HKHealthStore()
 
@@ -62,14 +67,20 @@ final class HealthKitManager: ObservableObject {
     }()
 
     func requestAuthorization() async {
-        guard Self.isHealthDataAvailable else { return }
+        guard Self.isHealthDataAvailable else {
+            authorizationError = "This device reports Health data isn't available (HKHealthStore.isHealthDataAvailable() is false) — this happens on iPad, or in some Simulator configurations."
+            return
+        }
         do {
             try await store.requestAuthorization(toShare: writeTypes, read: readTypes)
             isAuthorized = true
+            authorizationError = nil
             enableBackgroundDelivery()
             await refreshTodayActivity()
         } catch {
             isAuthorized = false
+            authorizationError = error.localizedDescription
+            print("HealthKit requestAuthorization failed: \(error)")
         }
     }
 
