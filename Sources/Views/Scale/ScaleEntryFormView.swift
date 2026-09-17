@@ -46,11 +46,13 @@ struct ScaleEntryFormView: View {
                     numberField("Basal metabolic rate (kcal)", text: $bmrText)
                 }
 
-                Section("Composition (this app only)") {
+                Section {
                     numberField("Muscle mass (\(useImperial ? "lb" : "kg"))", text: $muscleMassText)
                     numberField("Bone mass (\(useImperial ? "lb" : "kg"))", text: $boneMassText)
                     numberField("Visceral fat rating", text: $visceralFatText)
                     numberField("Subcutaneous fat %", text: $subcutaneousFatText)
+                } header: {
+                    Text("Composition (this app only)")
                 } footer: {
                     Text("Apple Health has no data type for muscle mass, bone mass, or visceral/subcutaneous fat, so these stay in this app's own log rather than a sync that would silently fail.")
                 }
