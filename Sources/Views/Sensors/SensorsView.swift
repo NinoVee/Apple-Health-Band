@@ -48,6 +48,17 @@ struct SensorsView: View {
                     }
                 }
 
+                if let systolic = bluetooth.latestReadings[.bloodPressureSystolic],
+                   let diastolic = bluetooth.latestReadings[.bloodPressureDiastolic] {
+                    Section("Blood Pressure") {
+                        Text("\(Int(systolic.value))/\(Int(diastolic.value)) mmHg").font(.largeTitle.bold())
+                        let status = bloodPressureStatus(systolic: systolic.value, diastolic: diastolic.value)
+                        Text(status.label)
+                            .font(.caption)
+                            .foregroundStyle(status.color)
+                    }
+                }
+
                 Section("Live readings") {
                     ForEach(SensorKind.allCases, id: \.self) { kind in
                         if let reading = bluetooth.latestReadings[kind] {
@@ -97,6 +108,8 @@ struct SensorsView: View {
         case .bodyTemperature: return "Body Temperature"
         case .rrInterval: return "RR Interval"
         case .heartRateVariability: return "Heart Rate Variability"
+        case .bloodPressureSystolic: return "Systolic"
+        case .bloodPressureDiastolic: return "Diastolic"
         }
     }
 
@@ -114,6 +127,7 @@ struct SensorsView: View {
         case .bodyTemperature: return "thermometer"
         case .rrInterval: return "waveform"
         case .heartRateVariability: return "waveform.path.ecg.rectangle"
+        case .bloodPressureSystolic, .bloodPressureDiastolic: return "heart.text.square.fill"
         }
     }
 
@@ -128,6 +142,23 @@ struct SensorsView: View {
         case 95...: return ("Normal", .green)
         case 90..<95: return ("Low", .orange)
         default: return ("Critical — seek medical attention", .red)
+        }
+    }
+
+    /// Simplified AHA blood pressure categories — not a diagnosis, just a
+    /// label to make the raw numbers easier to read at a glance.
+    private func bloodPressureStatus(systolic: Double, diastolic: Double) -> (label: String, color: Color) {
+        switch (systolic, diastolic) {
+        case (180..., _), (_, 120...):
+            return ("Hypertensive Crisis — seek medical attention", .red)
+        case (140..., _), (_, 90...):
+            return ("High (Stage 2)", .red)
+        case (130..<140, _), (_, 80..<90):
+            return ("High (Stage 1)", .orange)
+        case (120..<130, ..<80):
+            return ("Elevated", .yellow)
+        default:
+            return ("Normal", .green)
         }
     }
 }

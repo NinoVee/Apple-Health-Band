@@ -22,6 +22,8 @@ enum SensorParsers {
             return bodyComposition(from: data)
         case GattCharacteristic.temperatureMeasurement:
             return bodyTemperature(from: data).map { [$0] } ?? []
+        case GattCharacteristic.bloodPressureMeasurement:
+            return bloodPressure(from: data)
         default:
             return []
         }
@@ -182,6 +184,55 @@ enum SensorParsers {
         guard let raw = float32(data[(base + 1)...]) else { return nil }
         let celsius = isFahrenheit ? (raw - 32) * 5.0 / 9.0 : raw
         return SensorReading(kind: .bodyTemperature, value: celsius, unit: "°C", timestamp: Date())
+    }
+
+    /// Blood Pressure Measurement (0x2A35): flags(1) + systolic SFLOAT(2)
+    /// + diastolic SFLOAT(2) + mean arterial pressure SFLOAT(2, parsed to
+    /// keep offsets correct but not surfaced) + optional time stamp(7) +
+    /// optional pulse rate SFLOAT(2) + optional user ID(1) + optional
+    /// measurement status(2). Values are always mmHg — kPa readings are
+    /// converted, since HealthKit's blood pressure types are mmHg-based.
+    ///
+    /// Systolic and diastolic are paired into one `HKCorrelation` by
+    /// `ActivitySyncCoordinator` (see its `.bloodPressureDiastolic`
+    /// case), since Health expects them written together, not as two
+    /// independent samples. Pulse rate, if present, is surfaced as an
+    /// ordinary `.heartRate` reading — it's a real heart rate value
+    /// regardless of which sensor took it.
+    nonisolated static func bloodPressure(from data: Data) -> [SensorReading] {
+        guard data.count >= 7 else { return [] }
+        let base = data.startIndex
+        var offset = 1
+
+        func readSFloat() -> Double? {
+            guard data.count >= offset + 2 else { return nil }
+            let raw = UInt16(data[base + offset]) | (UInt16(data[base + offset + 1]) << 8)
+            offset += 2
+            return sfloat(raw)
+        }
+
+        let flags = data[base]
+        let isKPa = (flags & 0x01) != 0
+        let hasTimeStamp = (flags & 0x02) != 0
+        let hasPulseRate = (flags & 0x04) != 0
+
+        func mmHg(_ value: Double) -> Double {
+            isKPa ? value * 7.500617 : value
+        }
+
+        guard let systolicRaw = readSFloat(), let diastolicRaw = readSFloat(), readSFloat() != nil else { return [] }
+        let now = Date()
+        var readings = [
+            SensorReading(kind: .bloodPressureSystolic, value: mmHg(systolicRaw), unit: "mmHg", timestamp: now),
+            SensorReading(kind: .bloodPressureDiastolic, value: mmHg(diastolicRaw), unit: "mmHg", timestamp: now)
+        ]
+
+        if hasTimeStamp { offset += 7 }
+        if hasPulseRate, let pulseRate = readSFloat() {
+            readings.append(SensorReading(kind: .heartRate, value: pulseRate, unit: "bpm", timestamp: now))
+        }
+
+        return readings
     }
 
     /// IEEE-11073 32-bit FLOAT decode used by temperature measurements: a

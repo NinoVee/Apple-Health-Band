@@ -49,6 +49,14 @@ syncs the data it collects into Apple Health automatically.
 | SpO2 | Pulse Oximeter (`1822`) | Spot-check Measurement (`2A5E`) |
 | Weight / body fat / lean mass | Body Composition (`181B`) | Body Composition Measurement (`2A9C`) |
 | Body temperature | Health Thermometer (`1809`) | Temperature Measurement (`2A1C`) |
+| Blood pressure | Blood Pressure (`1810`) | Blood Pressure Measurement (`2A35`) |
+
+Blood pressure is written to Health as a paired `HKCorrelation`
+(systolic + diastolic together), not two independent samples, so it
+displays as one linked "120/80" reading rather than two unrelated
+numbers — see `HealthKitManager.writeBloodPressure`. If the cuff
+includes a pulse rate in the same measurement (a common optional
+field), it's surfaced as an ordinary heart rate reading too.
 
 Heart rate variability isn't its own GATT profile — it's computed
 in-app from **RR intervals** (beat-to-beat gaps), which the standard
@@ -70,11 +78,14 @@ like LightBlue is the easiest way to find them).
 
 `Sources/HealthKit/HealthKitManager.swift` requests read/write access and
 writes heart rate, step count, distance, active energy, blood oxygen,
-body temperature, heart rate variability (SDNN), and body composition
-(body fat %, weight, and fat-free mass mapped to HealthKit's
-`leanBodyMass`) as it receives them — these are ordinary HealthKit types
-any app can write, so they show up in Health and count toward your
-existing totals immediately.
+blood pressure, body temperature, heart rate variability (SDNN), height,
+BMI, basal metabolic rate, and body composition (body fat %, weight,
+and fat-free mass mapped to HealthKit's `leanBodyMass`) as it receives
+them — these are ordinary HealthKit types any app can write, so they
+show up in Health and count toward your existing totals immediately.
+This is the full set of vitals/metrics this app collects that Health
+actually has a data type for — see the table above and "Scale log"
+below for exactly what maps to what.
 
 **ECG is not writable by this app, and that's not a bug to fix later.**
 Apple lets any app *read* ECG recordings that are already in Health (e.g.

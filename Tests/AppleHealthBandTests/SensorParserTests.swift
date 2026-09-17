@@ -97,6 +97,33 @@ final class SensorParserTests: XCTestCase {
         XCTAssertEqual(readings.first?.value, 18.2, accuracy: 0.001)
     }
 
+    func testBloodPressureWithPulseRate() {
+        // flags: mmHg, no time stamp, pulse rate present (bit 2, 0x04);
+        // systolic 120 (SFLOAT mantissa 120, exponent 0), diastolic 80,
+        // MAP 93 (parsed but unused), pulse rate 65.
+        let data = Data([0x04, 0x78, 0x00, 0x50, 0x00, 0x5D, 0x00, 0x41, 0x00])
+        let readings = SensorParsers.bloodPressure(from: data)
+
+        XCTAssertEqual(readings.count, 3)
+        XCTAssertEqual(readings[0].kind, .bloodPressureSystolic)
+        XCTAssertEqual(readings[0].value, 120.0, accuracy: 0.001)
+        XCTAssertEqual(readings[1].kind, .bloodPressureDiastolic)
+        XCTAssertEqual(readings[1].value, 80.0, accuracy: 0.001)
+        XCTAssertEqual(readings[2].kind, .heartRate)
+        XCTAssertEqual(readings[2].value, 65.0, accuracy: 0.001)
+    }
+
+    func testBloodPressureKPaConvertsToMmHg() {
+        // flags: kPa units (bit 0), no optional fields;
+        // systolic 16 kPa, diastolic 11 kPa, MAP 13 kPa (unused)
+        let data = Data([0x01, 0x10, 0x00, 0x0B, 0x00, 0x0D, 0x00])
+        let readings = SensorParsers.bloodPressure(from: data)
+
+        XCTAssertEqual(readings.count, 2)
+        XCTAssertEqual(readings[0].value, 16.0 * 7.500617, accuracy: 0.01)
+        XCTAssertEqual(readings[1].value, 11.0 * 7.500617, accuracy: 0.01)
+    }
+
     func testUnknownCharacteristicDecodesToEmpty() {
         let readings = SensorParsers.decode(characteristicUUID: CBUUID(string: "FFFF"), data: Data([1, 2, 3]))
         XCTAssertTrue(readings.isEmpty)

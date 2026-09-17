@@ -13,9 +13,9 @@ import HealthKit
 /// estimate computed by `ActivitySyncCoordinator` from band heart-rate
 /// and movement data. Steps, distance, active energy, heart rate, blood
 /// oxygen, body temperature, heart rate variability (SDNN, computed from
-/// the band's RR intervals), height, BMI, basal energy burned, and body
-/// composition (weight/fat %/lean mass) are ordinary writable types and
-/// sync for real.
+/// the band's RR intervals), blood pressure, height, BMI, basal energy
+/// burned, and body composition (weight/fat %/lean mass) are ordinary
+/// writable types and sync for real.
 ///
 /// Muscle mass, bone mass, visceral fat, and subcutaneous fat have no
 /// matching HealthKit quantity type at all — not a permissions issue,
@@ -41,7 +41,7 @@ final class HealthKitManager: ObservableObject {
         let ids: [HKQuantityTypeIdentifier] = [
             .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation,
             .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN,
-            .height, .bodyMassIndex, .basalEnergyBurned
+            .height, .bodyMassIndex, .basalEnergyBurned, .bloodPressureSystolic, .bloodPressureDiastolic
         ]
         return Set(ids.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
     }()
@@ -50,7 +50,7 @@ final class HealthKitManager: ObservableObject {
         let quantityIDs: [HKQuantityTypeIdentifier] = [
             .heartRate, .stepCount, .activeEnergyBurned, .distanceWalkingRunning, .oxygenSaturation, .appleExerciseTime,
             .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN,
-            .height, .bodyMassIndex, .basalEnergyBurned
+            .height, .bodyMassIndex, .basalEnergyBurned, .bloodPressureSystolic, .bloodPressureDiastolic
         ]
         var set = Set<HKObjectType>(quantityIDs.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
         if let standType = HKCategoryType.categoryType(forIdentifier: .appleStandHour) {
@@ -102,9 +102,31 @@ final class HealthKitManager: ObservableObject {
             save(quantity: reading.value, unit: .degreeCelsius(), type: .bodyTemperature, at: reading.timestamp)
         case .heartRateVariability:
             save(quantity: reading.value, unit: .secondUnit(with: .milli), type: .heartRateVariabilitySDNN, at: reading.timestamp)
-        case .steps, .battery, .rrInterval:
-            break // steps are cumulative totals via writeStepCount; battery is telemetry; rrInterval feeds HRV only
+        case .steps, .battery, .rrInterval, .bloodPressureSystolic, .bloodPressureDiastolic:
+            break // steps are cumulative totals via writeStepCount; battery is telemetry; rrInterval feeds HRV;
+                  // blood pressure is written as a paired correlation via writeBloodPressure, not individually
         }
+    }
+
+    /// Writes systolic + diastolic together as an `HKCorrelation`, which
+    /// is how Health expects blood pressure stored (so it displays as a
+    /// linked "120/80" reading, not two unrelated numbers).
+    func writeBloodPressure(systolicMmHg: Double, diastolicMmHg: Double, at date: Date) {
+        guard isAuthorized,
+              let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic),
+              let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic),
+              let correlationType = HKCorrelationType.correlationType(forIdentifier: .bloodPressure)
+        else { return }
+
+        let unit = HKUnit.millimeterOfMercury()
+        let systolicSample = HKQuantitySample(
+            type: systolicType, quantity: HKQuantity(unit: unit, doubleValue: systolicMmHg), start: date, end: date
+        )
+        let diastolicSample = HKQuantitySample(
+            type: diastolicType, quantity: HKQuantity(unit: unit, doubleValue: diastolicMmHg), start: date, end: date
+        )
+        let correlation = HKCorrelation(type: correlationType, start: date, end: date, objects: [systolicSample, diastolicSample])
+        store.save(correlation) { _, _ in }
     }
 
     func writeStepCount(_ steps: Int, start: Date, end: Date) {

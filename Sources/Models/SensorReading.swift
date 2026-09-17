@@ -13,6 +13,8 @@ enum SensorKind: String, CaseIterable, Hashable {
     case bodyTemperature
     case rrInterval
     case heartRateVariability
+    case bloodPressureSystolic
+    case bloodPressureDiastolic
 }
 
 struct SensorReading: Identifiable, Equatable {

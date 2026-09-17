@@ -69,6 +69,12 @@ final class ActivitySyncCoordinator: ObservableObject {
             creditStepsFromCadence(reading)
         case .distance, .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature:
             healthKit.write(reading: reading)
+        case .bloodPressureSystolic:
+            break // paired and written when the matching diastolic reading arrives, below
+        case .bloodPressureDiastolic:
+            if let systolic = bluetooth.latestReadings[.bloodPressureSystolic] {
+                healthKit.writeBloodPressure(systolicMmHg: systolic.value, diastolicMmHg: reading.value, at: reading.timestamp)
+            }
         case .calories, .battery, .heartRateVariability:
             break
         }
