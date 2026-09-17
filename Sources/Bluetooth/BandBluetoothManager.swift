@@ -59,8 +59,13 @@ final class BandBluetoothManager: NSObject, ObservableObject {
     }
 
     func stopScanning() {
-        central.stopScan()
         isScanning = false
+        // central.stopScan() (like every other CBCentralManager command)
+        // logs an "API MISUSE" warning if called before the manager has
+        // reached .poweredOn — e.g. dismissing the scan sheet moments
+        // after launch, before Bluetooth permission has resolved.
+        guard central.state == .poweredOn else { return }
+        central.stopScan()
     }
 
     /// Connects an additional device without disturbing any devices
@@ -68,6 +73,10 @@ final class BandBluetoothManager: NSObject, ObservableObject {
     /// cuff, ...) you want reporting into the app at the same time.
     func connect(to device: BandDevice) {
         stopScanning()
+        guard central.state == .poweredOn else {
+            connectionStates[device.id] = .failed("Bluetooth isn't ready yet — try again in a moment.")
+            return
+        }
         peripheralsByID[device.id] = device.peripheral
         device.peripheral.delegate = self
         connectionStates[device.id] = .connecting
@@ -76,7 +85,7 @@ final class BandBluetoothManager: NSObject, ObservableObject {
 
     func disconnect(_ device: BandDevice) {
         pairedPeripheralIDs.remove(device.id)
-        guard let peripheral = peripheralsByID[device.id] else { return }
+        guard let peripheral = peripheralsByID[device.id], central.state == .poweredOn else { return }
         central.cancelPeripheralConnection(peripheral)
     }
 
