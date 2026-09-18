@@ -164,7 +164,14 @@ extension BandBluetoothManager: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        let name = peripheral.name ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? "Unknown device"
+        // Skip anything broadcasting without a name — mostly unrelated
+        // background accessories (phones, laptops, earbuds in a pocket)
+        // with nothing useful to show in "Nearby Devices." A real band,
+        // scale, or cuff advertises its own name.
+        guard let rawName = peripheral.name ?? (advertisementData[CBAdvertisementDataLocalNameKey] as? String) else { return }
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+
         let device = BandDevice(id: peripheral.identifier, name: name, rssi: RSSI.intValue, peripheral: peripheral)
         Task { @MainActor in
             if let index = discoveredDevices.firstIndex(where: { $0.id == device.id }) {
