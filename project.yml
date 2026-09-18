@@ -2,7 +2,7 @@ name: AppleHealthBand
 options:
   bundleIdPrefix: com.ninovee
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
   createIntermediateGroups: true
 settings:
   base:
@@ -12,7 +12,7 @@ targets:
   AppleHealthBand:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Sources
     info:
@@ -48,7 +48,7 @@ targets:
   AppleHealthBandTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "26.0"
     sources:
       - path: Tests/AppleHealthBandTests
     dependencies:

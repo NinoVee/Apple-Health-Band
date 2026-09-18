@@ -129,14 +129,19 @@ Training, Swimming, Cycling, Yoga, Boxing, Basketball, Tennis — each a
 highlighter-green push button, Apple Fitness-style. Tapping one starts a
 real `HKWorkoutSession` via `Sources/Workout/WorkoutSessionManager.swift`.
 
-**`HKWorkoutSession` was watchOS-only until iOS 17**, when Apple added
+**`HKWorkoutSession`/`HKLiveWorkoutBuilder`/`HKLiveWorkoutDataSource`
+require iOS 26** — they were watchOS-only before that, when Apple added
 iOS support specifically so third-party accessories (not just Apple
-Watch) can record real workouts to Health. Ending a workout here
-produces an actual `HKWorkout` — duration, calories, average heart rate
-— that shows up in the Fitness/Health apps like any Watch-recorded
-workout, not a pile of disconnected samples. This needs the
-`workout-processing` background mode (already in `project.yml`) so a
-session can keep running if you background the app mid-workout.
+Watch) can record real workouts to Health. That's why the app's
+deployment target is iOS 26.0, not the iOS 17 it started at — building
+against these APIs with a lower minimum fails at compile time (this
+was actually discovered as a build error, not read from a changelog, so
+trust the compiler over any doc that says iOS 17 elsewhere). Ending a
+workout here produces an actual `HKWorkout` — duration, calories,
+average heart rate — that shows up in the Fitness/Health apps like any
+Watch-recorded workout, not a pile of disconnected samples. This needs
+the `workout-processing` background mode (already in `project.yml`) so
+a session can keep running if you background the app mid-workout.
 
 **What "calibrated per exercise" actually means here** — worth being
 precise about, since it's easy to overclaim:
@@ -282,8 +287,11 @@ part of the Xcode project or iOS build).
 
 ## Setup
 
-**Requirements:** macOS with Xcode 15+, and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`).
+**Requirements:** macOS with a version of Xcode that includes the iOS 26
+SDK (needed for `HKWorkoutSession` on iOS — see "Workouts" above), and
+[XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`).
+The app's deployment target is iOS 26.0, so it needs a device or
+Simulator running iOS 26+ to build and run.
 
 1. Clone the repo and generate the Xcode project:
    ```bash

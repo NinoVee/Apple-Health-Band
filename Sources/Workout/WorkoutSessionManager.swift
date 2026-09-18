@@ -175,13 +175,15 @@ extension WorkoutSessionManager: HKWorkoutSessionDelegate {
             case .ended:
                 guard let builder else { return }
                 builder.endCollection(withEnd: date) { [weak self] _, error in
-                    if let error {
-                        Task { @MainActor in self?.errorMessage = error.localizedDescription }
-                    }
-                    self?.builder?.finishWorkout { _, error in
-                        Task { @MainActor in
-                            if let error { self?.errorMessage = error.localizedDescription }
-                            self?.cleanUpAfterEnd()
+                    Task { @MainActor in
+                        if let error {
+                            self?.errorMessage = error.localizedDescription
+                        }
+                        self?.builder?.finishWorkout { _, error in
+                            Task { @MainActor in
+                                if let error { self?.errorMessage = error.localizedDescription }
+                                self?.cleanUpAfterEnd()
+                            }
                         }
                     }
                 }
