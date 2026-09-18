@@ -24,9 +24,15 @@ syncs the data it collects into Apple Health automatically.
   fat/lean mass), etc., plus a read-only list of ECG recordings already
   in Health.
 - **Trends** — a segmented Activity/Scale switcher in the nav bar:
-  - *Activity*: step and active-energy history, read back from Health,
-    with a Week/Month/Year range picker (daily bars for Week/Month,
-    monthly bars for Year).
+  - *Activity*: step count and calories burned (bar charts, summed per
+    period), plus heart rate, blood oxygen, and blood pressure (line
+    charts, averaged per period — summing a vital sign over a week
+    wouldn't mean anything) — all read back from Health, with a
+    Week/Month/Year range picker (daily bars/points for Week/Month,
+    monthly for Year). Blood pressure plots systolic and diastolic as
+    two lines on one chart. Any of these show "No data" until a
+    reading of that kind has actually been synced from a device or
+    entered manually.
   - *Scale*: a manually-logged smart-scale history — weight, height,
     BMI, body fat %, fat-free body weight, muscle mass, bone mass,
     visceral fat, subcutaneous fat, and basal metabolic rate, plus a

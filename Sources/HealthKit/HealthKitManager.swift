@@ -207,11 +207,27 @@ final class HealthKitManager: ObservableObject {
 
     // MARK: - Trends
 
+    /// Steps/calories should be summed per period; heart rate, SpO2, and
+    /// blood pressure should be averaged — summing a vital sign over a
+    /// week would be meaningless.
+    enum TrendAggregation: Equatable {
+        case sum
+        case average
+
+        var statisticsOptions: HKStatisticsOptions {
+            switch self {
+            case .sum: return .cumulativeSum
+            case .average: return .discreteAverage
+            }
+        }
+    }
+
     func fetchHistory(
         for identifier: HKQuantityTypeIdentifier,
         unit: HKUnit,
         days: Int,
-        intervalComponents: DateComponents
+        intervalComponents: DateComponents,
+        aggregation: TrendAggregation = .sum
     ) async -> [DailyStat] {
         guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
         let calendar = Calendar.current
@@ -224,14 +240,15 @@ final class HealthKitManager: ObservableObject {
             let query = HKStatisticsCollectionQuery(
                 quantityType: type,
                 quantitySamplePredicate: predicate,
-                options: .cumulativeSum,
+                options: aggregation.statisticsOptions,
                 anchorDate: startOfToday,
                 intervalComponents: intervalComponents
             )
             query.initialResultsHandler = { _, results, _ in
                 var stats: [DailyStat] = []
                 results?.enumerateStatistics(from: start, to: end) { statistics, _ in
-                    let value = statistics.sumQuantity()?.doubleValue(for: unit) ?? 0
+                    let quantity = aggregation == .sum ? statistics.sumQuantity() : statistics.averageQuantity()
+                    let value = quantity?.doubleValue(for: unit) ?? 0
                     stats.append(DailyStat(date: statistics.startDate, value: value))
                 }
                 continuation.resume(returning: stats)
