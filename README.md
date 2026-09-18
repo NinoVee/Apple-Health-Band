@@ -14,7 +14,9 @@ syncs the data it collects into Apple Health automatically.
 ## What it does
 
 - **Today** — Move / Exercise / Stand rings, styled after Apple's Activity
-  app, plus steps, distance, and live heart rate.
+  app, plus steps, distance, live heart rate, and a highlighter-green
+  workout picker (8 types) that starts a real, Health-recorded workout
+  session. See "Workouts" below.
 - **Sensors** — scans for and pairs with a nearby BLE band, shows live
   heart rate (with a short graph and a computed HRV/SDNN readout), SpO2,
   cadence, battery, body temperature, body composition (weight/body
@@ -119,6 +121,45 @@ shows a read-only list of existing ECG recordings (classification +
 average heart rate, via `HealthKitManager.fetchRecentECGs`), and the app
 never attempts to record a new one from band data.
 
+## Workouts
+
+The Today tab's workout grid (`Sources/Views/Components/WorkoutControlsView.swift`,
+`Sources/Models/WorkoutType.swift`) covers 8 types — Running, Weight
+Training, Swimming, Cycling, Yoga, Boxing, Basketball, Tennis — each a
+highlighter-green push button, Apple Fitness-style. Tapping one starts a
+real `HKWorkoutSession` via `Sources/Workout/WorkoutSessionManager.swift`.
+
+**`HKWorkoutSession` was watchOS-only until iOS 17**, when Apple added
+iOS support specifically so third-party accessories (not just Apple
+Watch) can record real workouts to Health. Ending a workout here
+produces an actual `HKWorkout` — duration, calories, average heart rate
+— that shows up in the Fitness/Health apps like any Watch-recorded
+workout, not a pile of disconnected samples. This needs the
+`workout-processing` background mode (already in `project.yml`) so a
+session can keep running if you background the app mid-workout.
+
+**What "calibrated per exercise" actually means here** — worth being
+precise about, since it's easy to overclaim:
+- `WorkoutType.healthKitActivityType` tells HealthKit which activity
+  this is, so **Health's own** calorie/zone algorithms calibrate to it —
+  the same heart rate produces a different calorie estimate for running
+  vs. yoga. This app doesn't compute that; Apple's does, correctly, once
+  it knows the activity type.
+- `WorkoutType.exerciseHeartRateThreshold` calibrates
+  `ActivitySyncCoordinator`'s own exercise-minute heuristic per activity
+  (e.g. yoga's threshold is lower than boxing's) while a workout is active.
+- `WorkoutType.scanningInterval`, applied via
+  `BandBluetoothManager.setScanningInterval`, controls how often the app
+  re-polls **read-only, non-notify** BLE characteristics during a
+  workout. This is the one real lever the app has over "scanning
+  frequency" — a connected device's notify-based sensors (heart rate,
+  etc.) push updates on their own firmware schedule regardless of this
+  setting, and no generic BLE central can make a peripheral's physical
+  sensor sample faster than its own firmware does.
+
+Start/Pause/Resume/End map directly to `HKWorkoutSession`'s state
+machine; ending a workout also stops the calibrated re-poll timer.
+
 ## Appearance
 
 Settings has a Light/Dark/System segmented picker (`AppearanceMode`,
@@ -218,10 +259,11 @@ prompt tells the model the same thing.
 Sources/
   App/            App entry point, root TabView
   Models/         Plain data types (SensorReading, DailyActivity, Goals, BandDevice,
-                   ScaleEntry/ScaleLogStore, TrendRange, ...)
+                   ScaleEntry/ScaleLogStore, TrendRange, WorkoutType, ...)
   Bluetooth/       CBCentralManager wrapper, GATT UUIDs, characteristic parsers
   HealthKit/       HKHealthStore wrapper: auth, writes, today's totals, Trends history
   Sync/           Glues Bluetooth readings -> HealthKit writes + ring/HRV estimates
+  Workout/        WorkoutSessionManager: HKWorkoutSession/HKLiveWorkoutBuilder lifecycle
   AI/             Health summary builder, relay client, chat view model, image resizer
   Views/          Today / Sensors / Trends / Scale / Goals / Insights / Settings folders —
                    Scale and Goals are embedded in Trends and Settings, not their own tabs

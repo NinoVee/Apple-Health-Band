@@ -48,7 +48,9 @@ final class HealthKitManager: ObservableObject {
             .bodyFatPercentage, .bodyMass, .leanBodyMass, .bodyTemperature, .heartRateVariabilitySDNN,
             .height, .bodyMassIndex, .basalEnergyBurned, .bloodPressureSystolic, .bloodPressureDiastolic
         ]
-        return Set(ids.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
+        var set = Set<HKSampleType>(ids.compactMap { HKQuantityType.quantityType(forIdentifier: $0) })
+        set.insert(HKObjectType.workoutType()) // for WorkoutSessionManager
+        return set
     }()
 
     private let readTypes: Set<HKObjectType> = {
@@ -62,6 +64,7 @@ final class HealthKitManager: ObservableObject {
             set.insert(standType)
         }
         set.insert(HKObjectType.activitySummaryType())
+        set.insert(HKObjectType.workoutType()) // for WorkoutSessionManager
         set.insert(HKObjectType.electrocardiogramType()) // read-only — see class doc comment
         return set
     }()

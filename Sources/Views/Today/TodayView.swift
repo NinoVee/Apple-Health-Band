@@ -61,6 +61,8 @@ struct TodayView: View {
                         )
                     }
 
+                    WorkoutControlsView()
+
                     DeviceStatusCard()
                 }
                 .padding()

@@ -24,11 +24,12 @@ targets:
         NSBluetoothAlwaysUsageDescription: "Apple Health Band uses Bluetooth to connect to your smart band and read its sensors."
         NSBluetoothPeripheralUsageDescription: "Apple Health Band uses Bluetooth to connect to your smart band and read its sensors."
         NSHealthShareUsageDescription: "Apple Health Band reads your existing activity data from Health to show accurate rings and trends. If you enable AI Insights, a summary of that data is also sent to your chosen AI provider when you send a chat message."
-        NSHealthUpdateUsageDescription: "Apple Health Band writes steps, heart rate, distance, and blood oxygen collected from your band into Health."
+        NSHealthUpdateUsageDescription: "Apple Health Band writes vitals and body measurements collected from your connected devices (heart rate, steps, distance, blood oxygen, blood pressure, body composition, and more) into Health, and records workouts you start in the app."
         UIBackgroundModes:
           - bluetooth-central
           - healthkit
           - processing
+          - workout-processing
         BGTaskSchedulerPermittedIdentifiers:
           - com.ninovee.applehealthband.sync
     entitlements:

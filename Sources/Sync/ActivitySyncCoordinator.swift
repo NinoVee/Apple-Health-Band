@@ -17,11 +17,19 @@ import Combine
 ///   window of RR intervals (beat-to-beat gaps) the band reports
 ///   alongside heart rate — a real, standard HRV computation, not a
 ///   guess, just windowed rather than a full clinical-grade analysis.
+/// - The exercise heart-rate threshold is calibrated per active workout
+///   type when one is running (see `workoutSession`) — the same "100 bpm
+///   is elevated" rule doesn't make sense for yoga and boxing alike.
 @MainActor
 final class ActivitySyncCoordinator: ObservableObject {
     @Published private(set) var estimatedExerciseMinutes: Double = 0
     @Published private(set) var estimatedStandHours: Int = 0
     @Published private(set) var latestHRV: Double?
+
+    /// Set once after both are constructed (see `HealthBandApp`), so the
+    /// exercise-credit heuristic can use the active workout's calibrated
+    /// threshold instead of the flat default below.
+    weak var workoutSession: WorkoutSessionManager?
 
     let exerciseHeartRateThreshold: Double = 100
     let spo2WriteInterval: TimeInterval = 5 * 60
@@ -83,7 +91,8 @@ final class ActivitySyncCoordinator: ObservableObject {
 
     private func creditExerciseAndStand(for reading: SensorReading) {
         let now = reading.timestamp
-        if reading.value >= exerciseHeartRateThreshold {
+        let threshold = workoutSession?.activeWorkout?.exerciseHeartRateThreshold ?? exerciseHeartRateThreshold
+        if reading.value >= threshold {
             if let last = lastExerciseCreditTimestamp {
                 let delta = now.timeIntervalSince(last) / 60.0
                 if delta > 0, delta < 5 {

@@ -13,7 +13,9 @@ import Combine
 /// kinds a band, scale, and cuff report don't normally overlap (the one
 /// exception, heart rate, just reflects whichever device reported most
 /// recently — the same "latest reading wins" rule already used
-/// everywhere else in the app).
+/// everywhere else in the app). `setScanningInterval` also controls how
+/// often read-only (non-notify) characteristics get re-polled — see
+/// `WorkoutSessionManager`, which drives this per active workout type.
 @MainActor
 final class BandBluetoothManager: NSObject, ObservableObject {
     enum ConnectionState: Equatable {
@@ -35,6 +37,8 @@ final class BandBluetoothManager: NSObject, ObservableObject {
 
     private var central: CBCentralManager!
     private var peripheralsByID: [UUID: CBPeripheral] = [:]
+    private var readOnlyCharacteristicsByPeripheral: [UUID: [CBCharacteristic]] = [:]
+    private var pollingTimer: Timer?
 
     private var pairedPeripheralIDs: Set<UUID> {
         get {
@@ -91,6 +95,30 @@ final class BandBluetoothManager: NSObject, ObservableObject {
 
     func connectionState(for device: BandDevice) -> ConnectionState {
         connectionStates[device.id] ?? .disconnected
+    }
+
+    /// Sets how often read-only (non-notify) characteristics on every
+    /// connected device get re-read — pass `nil` to stop. This is the one
+    /// real lever this app has over "scanning frequency": a device's
+    /// notify-based sensors (heart rate, etc.) push updates on their own
+    /// firmware schedule regardless of this setting, since the app can't
+    /// command a peripheral to sample its physical sensor faster.
+    func setScanningInterval(_ interval: TimeInterval?) {
+        pollingTimer?.invalidate()
+        pollingTimer = nil
+        guard let interval else { return }
+        pollingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.rePollReadOnlyCharacteristics() }
+        }
+    }
+
+    private func rePollReadOnlyCharacteristics() {
+        for (peripheralID, characteristics) in readOnlyCharacteristicsByPeripheral {
+            guard let peripheral = peripheralsByID[peripheralID], peripheral.state == .connected else { continue }
+            for characteristic in characteristics {
+                peripheral.readValue(for: characteristic)
+            }
+        }
     }
 
     private func attemptReconnectAll() {
@@ -177,6 +205,7 @@ extension BandBluetoothManager: CBCentralManagerDelegate {
         Task { @MainActor in
             connectedDevices.removeAll { $0.id == identifier }
             connectionStates[identifier] = .disconnected
+            readOnlyCharacteristicsByPeripheral[identifier] = nil
         }
     }
 }
@@ -191,12 +220,19 @@ extension BandBluetoothManager: CBPeripheralDelegate {
 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         guard let characteristics = service.characteristics else { return }
+        let peripheralID = peripheral.identifier
+        var readOnly: [CBCharacteristic] = []
         for characteristic in characteristics {
             if characteristic.properties.contains(.notify) {
                 peripheral.setNotifyValue(true, for: characteristic)
             } else if characteristic.properties.contains(.read) {
                 peripheral.readValue(for: characteristic)
+                readOnly.append(characteristic)
             }
+        }
+        guard !readOnly.isEmpty else { return }
+        Task { @MainActor in
+            readOnlyCharacteristicsByPeripheral[peripheralID, default: []].append(contentsOf: readOnly)
         }
     }
 
