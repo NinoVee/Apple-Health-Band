@@ -282,7 +282,7 @@ private struct CurrentReadingsCard: View {
                 .foregroundStyle(.secondary)
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                (Text(value) + Text(" \(unit)").font(.title3))
+                Text("\(value)\(Text(" \(unit)").font(.title3))")
                     .font(.title.bold())
                     .foregroundStyle(WorkoutTheme.highlighterGreen)
                 Text(relativeTimestamp(timestamp))
