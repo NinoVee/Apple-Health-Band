@@ -15,7 +15,7 @@ syncs the data it collects into Apple Health automatically.
 
 - **Today** — Move / Exercise / Stand rings, styled after Apple's Activity
   app, plus steps, distance, live heart rate, and a highlighter-green
-  workout picker (8 types) that starts a real, Health-recorded workout
+  workout picker (9 types) that starts a real, Health-recorded workout
   session. See "Workouts" below.
 - **Sensors** — scans for and pairs with a nearby BLE band, shows live
   heart rate (with a short graph and a computed HRV/SDNN readout), SpO2,
@@ -124,8 +124,8 @@ never attempts to record a new one from band data.
 ## Workouts
 
 The Today tab's workout grid (`Sources/Views/Components/WorkoutControlsView.swift`,
-`Sources/Models/WorkoutType.swift`) covers 8 types — Running, Weight
-Training, Swimming, Cycling, Yoga, Boxing, Basketball, Tennis — each a
+`Sources/Models/WorkoutType.swift`) covers 9 types — Running, Weight
+Training, Swimming, Cycling, Yoga, Boxing, Basketball, Tennis, Pilates — each a
 highlighter-green push button, Apple Fitness-style. Tapping one starts a
 real `HKWorkoutSession` via `Sources/Workout/WorkoutSessionManager.swift`.
 

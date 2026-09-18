@@ -10,6 +10,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
     case boxing
     case basketball
     case tennis
+    case pilates
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         case .boxing: return "Boxing"
         case .basketball: return "Basketball"
         case .tennis: return "Tennis"
+        case .pilates: return "Pilates"
         }
     }
 
@@ -36,6 +38,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         case .boxing: return "figure.boxing"
         case .basketball: return "figure.basketball"
         case .tennis: return "figure.tennis"
+        case .pilates: return "figure.pilates"
         }
     }
 
@@ -54,6 +57,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
         case .boxing: return .boxing
         case .basketball: return .basketball
         case .tennis: return .tennis
+        case .pilates: return .pilates
         }
     }
 
@@ -64,6 +68,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
     var exerciseHeartRateThreshold: Double {
         switch self {
         case .yoga: return 90
+        case .pilates: return 95
         case .weightTraining: return 100
         case .basketball, .tennis: return 110
         case .running, .cycling, .swimming: return 120
@@ -81,6 +86,7 @@ enum WorkoutType: String, CaseIterable, Identifiable {
     var scanningInterval: TimeInterval {
         switch self {
         case .yoga: return 10
+        case .pilates: return 8
         case .weightTraining: return 5
         case .basketball, .tennis, .swimming: return 3
         case .cycling: return 3
