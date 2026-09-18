@@ -67,6 +67,7 @@ struct TrendsView: View {
 
 private struct ActivityTrendsView: View {
     @EnvironmentObject var healthKit: HealthKitManager
+    @EnvironmentObject var bluetooth: BandBluetoothManager
     @State private var range: TrendRange = .week
     @State private var steps: [DailyStat] = []
     @State private var calories: [DailyStat] = []
@@ -78,6 +79,8 @@ private struct ActivityTrendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                CurrentReadingsCard()
+
                 Picker("Range", selection: $range) {
                     ForEach(TrendRange.allCases) { range in
                         Text(range.label).tag(range)
@@ -215,5 +218,83 @@ private struct ActivityTrendsView: View {
         bloodOxygen = (await spo2History).map { DailyStat(date: $0.date, value: $0.value * 100) }
         systolic = await systolicHistory
         diastolic = await diastolicHistory
+    }
+}
+
+/// Highlighter-green readout of the most recent blood pressure, blood
+/// oxygen, and weight readings reported live by a connected device
+/// (cuff, pulse oximeter/band, scale) — distinct from the historical
+/// charts below, which are pulled back from Health. Only shows metrics
+/// a device has actually reported since launch/reconnect.
+private struct CurrentReadingsCard: View {
+    @EnvironmentObject var bluetooth: BandBluetoothManager
+
+    private var systolic: SensorReading? { bluetooth.latestReadings[.bloodPressureSystolic] }
+    private var diastolic: SensorReading? { bluetooth.latestReadings[.bloodPressureDiastolic] }
+    private var spo2: SensorReading? { bluetooth.latestReadings[.spo2] }
+    private var weight: SensorReading? { bluetooth.latestReadings[.bodyMass] }
+
+    private var hasAnyReading: Bool {
+        (systolic != nil && diastolic != nil) || spo2 != nil || weight != nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Current Readings")
+                .font(.headline)
+
+            if hasAnyReading {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let systolic, let diastolic {
+                        readingRow(
+                            label: "Blood Pressure",
+                            value: "\(Int(systolic.value))/\(Int(diastolic.value))",
+                            unit: "mmHg",
+                            timestamp: max(systolic.timestamp, diastolic.timestamp)
+                        )
+                    }
+                    if let spo2 {
+                        readingRow(label: "Blood Oxygen", value: "\(Int(spo2.value))", unit: "%", timestamp: spo2.timestamp)
+                    }
+                    if let weight {
+                        readingRow(
+                            label: "Weight",
+                            value: String(format: "%.1f", weight.value),
+                            unit: "kg",
+                            timestamp: weight.timestamp
+                        )
+                    }
+                }
+            } else {
+                Text("Connect a blood pressure cuff, pulse oximeter, or scale to see live readings here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func readingRow(label: String, value: String, unit: String, timestamp: Date) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                (Text(value) + Text(" \(unit)").font(.title3))
+                    .font(.title.bold())
+                    .foregroundStyle(WorkoutTheme.highlighterGreen)
+                Text(relativeTimestamp(timestamp))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func relativeTimestamp(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return "Updated " + formatter.localizedString(for: date, relativeTo: .now)
     }
 }
