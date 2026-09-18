@@ -1,16 +1,40 @@
 import SwiftUI
 
 /// Apple Fitness-style highlighter-green workout controls for the Today
-/// tab: a grid of workout-type buttons when idle, or a live Start/Pause/
-/// End card once `WorkoutSessionManager` has an active session.
+/// tab: a single "Start a Workout" button when idle (tapping it opens
+/// the full 9-type picker in a sheet, keeping Today itself uncluttered),
+/// or a live Start/Pause/End card once `WorkoutSessionManager` has an
+/// active session.
 struct WorkoutControlsView: View {
     @EnvironmentObject var workoutSession: WorkoutSessionManager
+    @State private var showingPicker = false
 
     var body: some View {
         if workoutSession.activeWorkout != nil {
             ActiveWorkoutCard()
         } else {
-            WorkoutTypeGrid()
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    showingPicker = true
+                } label: {
+                    Label("Start a Workout", systemImage: "figure.run")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .foregroundStyle(.black)
+                        .background(WorkoutTheme.highlighterGreen, in: RoundedRectangle(cornerRadius: 18))
+                }
+                .buttonStyle(.plain)
+
+                if let error = workoutSession.errorMessage {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+            .sheet(isPresented: $showingPicker) {
+                WorkoutTypePickerView()
+            }
         }
     }
 }
@@ -21,41 +45,50 @@ enum WorkoutTheme {
     static let highlighterGreen = Color(red: 0.68, green: 1.0, blue: 0.18)
 }
 
-private struct WorkoutTypeGrid: View {
+private struct WorkoutTypePickerView: View {
     @EnvironmentObject var workoutSession: WorkoutSessionManager
+    @Environment(\.dismiss) private var dismiss
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: 12)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Start a Workout")
-                .font(.headline)
-
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(WorkoutType.allCases) { type in
-                    Button {
-                        workoutSession.start(type)
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: type.systemImage)
-                                .font(.title2)
-                            Text(type.label)
-                                .font(.caption.bold())
-                                .multilineTextAlignment(.center)
-                                .lineLimit(2)
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(WorkoutType.allCases) { type in
+                        Button {
+                            workoutSession.start(type)
+                            dismiss()
+                        } label: {
+                            VStack(spacing: 8) {
+                                Image(systemName: type.systemImage)
+                                    .font(.title2)
+                                Text(type.label)
+                                    .font(.caption.bold())
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .foregroundStyle(.black)
+                            .background(WorkoutTheme.highlighterGreen, in: RoundedRectangle(cornerRadius: 18))
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .foregroundStyle(.black)
-                        .background(WorkoutTheme.highlighterGreen, in: RoundedRectangle(cornerRadius: 18))
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
+                }
+                .padding()
+
+                if let error = workoutSession.errorMessage {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal)
                 }
             }
-
-            if let error = workoutSession.errorMessage {
-                Text(error)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
+            .navigationTitle("Start a Workout")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
             }
         }
     }

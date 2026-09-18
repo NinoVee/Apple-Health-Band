@@ -14,9 +14,10 @@ syncs the data it collects into Apple Health automatically.
 ## What it does
 
 - **Today** — Move / Exercise / Stand rings, styled after Apple's Activity
-  app, plus steps, distance, live heart rate, and a highlighter-green
-  workout picker (9 types) that starts a real, Health-recorded workout
-  session. See "Workouts" below.
+  app, plus steps, distance, live heart rate, and a single "Start a
+  Workout" button that opens a 9-type picker in a sheet — keeps Today
+  itself uncluttered while starting a real, Health-recorded workout
+  session is still one tap away. See "Workouts" below.
 - **Sensors** — scans for and pairs with a nearby BLE band, shows live
   heart rate (with a short graph and a computed HRV/SDNN readout), SpO2,
   cadence, battery, body temperature, body composition (weight/body
@@ -123,11 +124,15 @@ never attempts to record a new one from band data.
 
 ## Workouts
 
-The Today tab's workout grid (`Sources/Views/Components/WorkoutControlsView.swift`,
-`Sources/Models/WorkoutType.swift`) covers 9 types — Running, Weight
-Training, Swimming, Cycling, Yoga, Boxing, Basketball, Tennis, Pilates — each a
-highlighter-green push button, Apple Fitness-style. Tapping one starts a
-real `HKWorkoutSession` via `Sources/Workout/WorkoutSessionManager.swift`.
+Today has one highlighter-green **"Start a Workout"** button
+(`Sources/Views/Components/WorkoutControlsView.swift`) rather than 9
+buttons crowding the screen at once — tapping it opens a sheet with a
+grid of all 9 types (`Sources/Models/WorkoutType.swift`): Running,
+Weight Training, Swimming, Cycling, Yoga, Boxing, Basketball, Tennis,
+Pilates, each its own highlighter-green push button, Apple
+Fitness-style. Picking one closes the sheet and starts a real
+`HKWorkoutSession` via `Sources/Workout/WorkoutSessionManager.swift`;
+Today then swaps the Start button for a live Start/Pause/End card.
 
 **`HKWorkoutSession`/`HKLiveWorkoutBuilder`/`HKLiveWorkoutDataSource`
 require iOS 26** — they were watchOS-only before that, when Apple added
