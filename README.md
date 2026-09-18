@@ -113,10 +113,28 @@ instead gets a rough `steps × 0.04 kcal` estimate from
 
 Cheap/generic bands vary a lot in what they actually implement, and many
 push steps, sleep, and SpO2 through **vendor-specific** services instead
-of these standard ones. `Sources/Bluetooth/GattProfiles.swift` has a
-`VendorService`/`VendorSensorDecoder` extension point — add your exact
-band's UUIDs and a decoder there once you know them (a BLE sniffer app
-like LightBlue is the easiest way to find them).
+of these standard ones — some (a common one seen during development: a
+`0xFEE7` service with `0xFEA1`/`0xFEA2`/`0xFEC7`-`0xFEC9` characteristics,
+used by many rebranded Amazon bands built on the same manufacturer
+reference design) implement *no* standard profile at all.
+`Sources/Bluetooth/GattProfiles.swift` has a `VendorService`/
+`VendorSensorDecoder` extension point — add your exact band's UUIDs and
+a decoder there once you know them (a BLE sniffer app like LightBlue is
+the easiest way to find them), but reverse-engineering an undocumented
+binary protocol from scratch is real work with no guarantee of success.
+
+Before doing that: **check whether your band's own companion app
+already syncs to Apple Health.** Many of these rebranded bands ship
+with a generic companion app (e.g. "G Band," "GloryFit," "DaFit,"
+"VeryFitPro," "WearFit Pro" — look at what came with your specific
+device) that has its own HealthKit write support, independent of this
+app entirely. If it does, there's nothing to build — leave the band
+paired with its own app (most BLE peripherals only hold one central
+connection at a time, so don't also connect it here) and this app
+picks up everything that app writes to Health automatically, the same
+way it already reads Steps and Distance. Connecting a device directly
+to this app (see "Sensors" above) is for hardware that has *no* such
+companion app, or whose companion app doesn't sync to Health.
 
 ## How it talks to Apple Health
 

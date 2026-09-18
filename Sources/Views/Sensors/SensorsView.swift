@@ -30,7 +30,7 @@ struct SensorsView: View {
                 } header: {
                     Text("Devices")
                 } footer: {
-                    Text("Pair a band, a scale, and a blood pressure cuff at the same time — each syncs whatever it reports (heart rate, weight, blood pressure, etc.) into the same Health data.")
+                    Text("Pair a band, a scale, and a blood pressure cuff at the same time — each syncs whatever it reports (heart rate, weight, blood pressure, etc.) into the same Health data. If your device came with its own companion app that already syncs to Apple Health (common for many bands), you don't need to connect it here too — leave it paired with its own app instead (most BLE devices only hold one connection at a time) and this app will pick up everything it writes to Health automatically, same as Steps and Distance already do. Connecting a device here is for ones without their own Health sync.")
                 }
 
                 if let heartRate = bluetooth.latestReadings[.heartRate] {
