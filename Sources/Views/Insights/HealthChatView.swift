@@ -26,7 +26,14 @@ struct HealthChatView: View {
             .toolbar {
                 if isEnabled, let viewModel {
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Clear Chat", role: .destructive) {
+                        // Forces the keyboard down before leaving — a
+                        // focused TextField can otherwise leave the
+                        // keyboard visually stuck on top of whatever's
+                        // navigated to next, swallowing every touch (see
+                        // RootView's tab-change fix, which covers tab
+                        // switches; this covers manually leaving here).
+                        Button("Exit Chat") {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                             viewModel.clear()
                         }
                     }
