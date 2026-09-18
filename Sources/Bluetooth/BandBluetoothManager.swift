@@ -230,7 +230,12 @@ extension BandBluetoothManager: CBPeripheralDelegate {
         let peripheralID = peripheral.identifier
         var readOnly: [CBCharacteristic] = []
         for characteristic in characteristics {
-            if characteristic.properties.contains(.notify) {
+            // setNotifyValue subscribes to either mechanism — CoreBluetooth
+            // abstracts notify vs. indicate behind the same call. Some
+            // vendor characteristics (e.g. VWAR MG's 0xFEC8, 0xFEA2) only
+            // advertise .indicate, not .notify, so both need checking or
+            // their pushes are silently missed.
+            if characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) {
                 peripheral.setNotifyValue(true, for: characteristic)
             } else if characteristic.properties.contains(.read) {
                 peripheral.readValue(for: characteristic)

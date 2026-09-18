@@ -25,8 +25,23 @@ enum SensorParsers {
         case GattCharacteristic.bloodPressureMeasurement:
             return bloodPressure(from: data)
         default:
+            logUnhandled(characteristicUUID: characteristicUUID, data: data)
             return []
         }
+    }
+
+    /// Prints the raw bytes from any characteristic this app doesn't
+    /// have a decoder for — e.g. VWAR MG's proprietary services (see
+    /// `VendorService.vwarMG`), which have no known protocol yet. Watch
+    /// Xcode's console while triggering a specific, known action (a
+    /// heart-rate reading, a step, opening the band's own app) so the
+    /// timing/context of what comes back can be matched to a byte
+    /// layout. Debug-only — never runs in a Release build.
+    nonisolated private static func logUnhandled(characteristicUUID: CBUUID, data: Data) {
+        #if DEBUG
+        let hex = data.map { String(format: "%02X", $0) }.joined(separator: " ")
+        print("[SensorParsers] unhandled characteristic \(characteristicUUID): \(hex)")
+        #endif
     }
 
     /// Heart Rate Measurement (0x2A37): flags byte, then an 8- or 16-bit
