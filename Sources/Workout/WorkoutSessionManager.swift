@@ -3,7 +3,7 @@ import HealthKit
 import Combine
 
 /// Drives a live `HKWorkoutSession` from BLE sensor data. `HKWorkoutSession`
-/// was watchOS-only until iOS 17, when Apple added iOS support
+/// was watchOS-only before iOS 26, when Apple added iOS support
 /// specifically so third-party accessories — like this band, not just an
 /// Apple Watch — can record a real workout to Health. Ending a session
 /// here produces an actual `HKWorkout` (duration, calories, average
@@ -80,9 +80,12 @@ final class WorkoutSessionManager: NSObject, ObservableObject {
             let now = Date()
             startDate = now
             session.startActivity(with: now)
-            builder.beginCollection(withStart: now) { [weak self] _, error in
-                if let error {
-                    Task { @MainActor in self?.errorMessage = error.localizedDescription }
+
+            Task { @MainActor in
+                do {
+                    _ = try await builder.beginCollection(at: now)
+                } catch {
+                    self.errorMessage = error.localizedDescription
                 }
             }
 
@@ -174,19 +177,13 @@ extension WorkoutSessionManager: HKWorkoutSessionDelegate {
                 isPaused = false
             case .ended:
                 guard let builder else { return }
-                builder.endCollection(withEnd: date) { [weak self] _, error in
-                    Task { @MainActor in
-                        if let error {
-                            self?.errorMessage = error.localizedDescription
-                        }
-                        self?.builder?.finishWorkout { _, error in
-                            Task { @MainActor in
-                                if let error { self?.errorMessage = error.localizedDescription }
-                                self?.cleanUpAfterEnd()
-                            }
-                        }
-                    }
+                do {
+                    _ = try await builder.endCollection(at: date)
+                    _ = try await builder.finishWorkout()
+                } catch {
+                    errorMessage = error.localizedDescription
                 }
+                cleanUpAfterEnd()
             default:
                 break
             }
