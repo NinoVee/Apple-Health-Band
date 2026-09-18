@@ -17,6 +17,13 @@ import Combine
 ///   window of RR intervals (beat-to-beat gaps) the band reports
 ///   alongside heart rate — a real, standard HRV computation, not a
 ///   guess, just windowed rather than a full clinical-grade analysis.
+/// - Calories: a band's Heart Rate Measurement characteristic can
+///   optionally include an Energy Expended field — a running kcal total
+///   since the band last reset it, not a per-sample amount — so this
+///   writes only the increase since the previous reading. Separately, a
+///   band that reports cadence via Running Speed and Cadence gets a
+///   rough steps x 0.04 kcal estimate instead. A device reporting both
+///   would double-count; none seen so far do.
 /// - The exercise heart-rate threshold is calibrated per active workout
 ///   type when one is running (see `workoutSession`) — the same "100 bpm
 ///   is elevated" rule doesn't make sense for yoga and boxing alike.
@@ -42,6 +49,7 @@ final class ActivitySyncCoordinator: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     private var lastCadenceTimestamp: Date?
+    private var lastEnergyExpendedKcal: Double?
     private var lastExerciseCreditTimestamp: Date?
     private var standHoursCredited = Set<Int>()
     private var lastSpo2WriteTime: Date?
@@ -83,7 +91,9 @@ final class ActivitySyncCoordinator: ObservableObject {
             if let systolic = bluetooth.latestReadings[.bloodPressureSystolic] {
                 healthKit.writeBloodPressure(systolicMmHg: systolic.value, diastolicMmHg: reading.value, at: reading.timestamp)
             }
-        case .calories, .battery, .heartRateVariability:
+        case .calories:
+            creditCaloriesFromEnergyExpended(reading)
+        case .battery, .heartRateVariability:
             break
         }
         Task { await healthKit.refreshTodayActivity() }
@@ -117,6 +127,19 @@ final class ActivitySyncCoordinator: ObservableObject {
         let estimatedKcal = Double(steps) * 0.04 // rough steps-to-kcal estimate
         healthKit.write(reading: SensorReading(kind: .calories, value: estimatedKcal, unit: "kcal", timestamp: now))
         creditStandHour(at: now)
+    }
+
+    /// The Heart Rate Measurement characteristic's Energy Expended field
+    /// is a running kcal total since the band last reset it, not a
+    /// per-sample amount, so this writes only the increase since the
+    /// previous reading. If the new value is lower than the last one, the
+    /// band reset its own counter (e.g. after a reconnect) — treated as a
+    /// fresh delta from zero rather than going negative.
+    private func creditCaloriesFromEnergyExpended(_ reading: SensorReading) {
+        defer { lastEnergyExpendedKcal = reading.value }
+        let delta = lastEnergyExpendedKcal.map { reading.value - $0 } ?? reading.value
+        guard delta > 0 else { return }
+        healthKit.write(reading: SensorReading(kind: .calories, value: delta, unit: "kcal", timestamp: reading.timestamp))
     }
 
     private func accumulateHRV(_ reading: SensorReading) {

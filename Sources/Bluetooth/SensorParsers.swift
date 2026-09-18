@@ -31,10 +31,13 @@ enum SensorParsers {
 
     /// Heart Rate Measurement (0x2A37): flags byte, then an 8- or 16-bit
     /// beats-per-minute value (flag bit 0), optional Energy Expended (bit
-    /// 3), then zero or more RR-Interval values (bit 4) — beat-to-beat
-    /// intervals in 1/1024s, the raw data HRV metrics are computed from.
-    /// See `ActivitySyncCoordinator` for how RR intervals become an SDNN
-    /// estimate written to Health as `heartRateVariabilitySDNN`.
+    /// 3) — a UINT16 in kJ, a running total since the band last reset it,
+    /// not a per-sample amount, converted to kcal here — then zero or more
+    /// RR-Interval values (bit 4) — beat-to-beat intervals in 1/1024s, the
+    /// raw data HRV metrics are computed from. See `ActivitySyncCoordinator`
+    /// for how RR intervals become an SDNN estimate written to Health as
+    /// `heartRateVariabilitySDNN`, and how the Energy Expended running
+    /// total becomes incremental `activeEnergyBurned` writes.
     nonisolated static func heartRate(from data: Data) -> [SensorReading] {
         guard let flags = data.first else { return [] }
         let base = data.startIndex
@@ -57,7 +60,13 @@ enum SensorParsers {
 
         var readings = [SensorReading(kind: .heartRate, value: hrValue, unit: "bpm", timestamp: now)]
 
-        if energyExpendedPresent { offset += 2 } // kJ — not surfaced by this app
+        if energyExpendedPresent {
+            if data.count >= offset + 2 {
+                let kilojoules = UInt16(data[base + offset]) | (UInt16(data[base + offset + 1]) << 8)
+                readings.append(SensorReading(kind: .calories, value: Double(kilojoules) / 4.184, unit: "kcal", timestamp: now))
+            }
+            offset += 2
+        }
 
         if rrIntervalPresent {
             while data.count >= offset + 2 {

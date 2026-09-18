@@ -102,6 +102,15 @@ same statistic behind HealthKit's `heartRateVariabilitySDNN` — a real
 computation, just a simpler rolling window rather than Apple Watch's
 full pipeline.
 
+Calories burned isn't its own GATT profile either. If a band reports
+the Heart Rate Measurement characteristic's optional **Energy
+Expended** field (a running kcal total since the band last reset it),
+this app converts it to `activeEnergyBurned` deltas and writes those —
+that's real calorie data from the band's own sensor fusion, not an
+app-side guess. A band that only reports cadence (no Energy Expended)
+instead gets a rough `steps × 0.04 kcal` estimate from
+`ActivitySyncCoordinator.creditStepsFromCadence`.
+
 Cheap/generic bands vary a lot in what they actually implement, and many
 push steps, sleep, and SpO2 through **vendor-specific** services instead
 of these standard ones. `Sources/Bluetooth/GattProfiles.swift` has a
